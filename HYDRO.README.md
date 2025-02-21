@@ -5,28 +5,37 @@ The coupling mechanism will use [Earth System Modeling Framework](https://earths
 (ESMF) and the [National Unified Operational Prediction Capability](https://earthsystemmodeling.org/nuopc)
 (NUOPC) interoperability layer, also revered to as a cap.
 
+
 ## Goals
 - NUOPC caps
   - two-way interfacing: WRF-Hydro runs the NoahMP land model
   - one-way interfacing: WRF-Hydro passes routing data
 - Testcases
 
+
 ## MPAS and MPAS-Hydro Build Process
-- [ ] add WRF-Hydro as submodule
+```
+Retrieve repository
+$ git clone --branch mpas-hydro --recurse-submodules git@github.com:scrasmussen/MPAS-Model.git mpas-model
+$ cd mpas-model
+```
 
 
 ## NUOPC Cap Exchange
 - [ ] Add list of variables being exchanged for two and one way coupling
 
+
 ## Graphs
-- [ ] create graph of procedure
+- [ ] create graphs of procedures, variables exchanged, data structures, process workflow
 
 
 ## Directory Structure
 ```
-mpas/
+mpas-model/
 ├──src/
-│   ├──x_hydro/
+│   ├──mpas_hydro/
+│   │   ├──src/
+│   │   └──tests/
 │   ├──core_atmosphere/
 │   ├──core_init_atmosphere/
 │   ├──core_landice/
