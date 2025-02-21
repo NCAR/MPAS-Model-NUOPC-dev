@@ -22,8 +22,8 @@ contains
     implicit none
 
     type(NoahmpIO_type), intent(inout) :: NoahmpIO
-   
-! ------------------------------------------------- 
+
+! -------------------------------------------------
     associate(                               &
               nsoil   =>  NoahmpIO%nsoil    ,&
               nsnow   =>  NoahmpIO%nsnow     &
@@ -67,7 +67,7 @@ contains
     if ( allocated (NoahmpIO%u_phy)     ) deallocate ( NoahmpIO%u_phy               ) ! 3d u wind component [m/s]
     if ( allocated (NoahmpIO%v_phy)     ) deallocate ( NoahmpIO%v_phy               ) ! 3d v wind component [m/s]
     if ( allocated (NoahmpIO%p8w)       ) deallocate ( NoahmpIO%p8w                 ) ! 3d pressure, valid at interface [Pa]
- 
+
     ! spatial varying parameter map
     if ( NoahmpIO%iopt_soil > 1 ) then
        if ( allocated (NoahmpIO%soilcomp)) deallocate ( NoahmpIO%soilcomp           ) ! soil sand and clay content [fraction]
@@ -192,8 +192,8 @@ contains
     if ( allocated (NoahmpIO%irfivol) ) deallocate ( NoahmpIO%irfivol               ) ! amount of irrigation by micro (mm)
     if ( allocated (NoahmpIO%irrsplh) ) deallocate ( NoahmpIO%irrsplh               ) ! latent heating from sprinkler evaporation (W/m2)
     if ( allocated (NoahmpIO%loctim)  ) deallocate ( NoahmpIO%loctim                ) ! local time
-  
-    ! OUT (with no Noah LSM equivalent) (as defined in WRF)   
+
+    ! OUT (with no Noah LSM equivalent) (as defined in WRF)
     if ( allocated (NoahmpIO%t2mvxy)     ) deallocate ( NoahmpIO%t2mvxy             ) ! 2m temperature of vegetation part
     if ( allocated (NoahmpIO%t2mbxy)     ) deallocate ( NoahmpIO%t2mbxy             ) ! 2m temperature of bare ground part
     if ( allocated (NoahmpIO%t2mxy)      ) deallocate ( NoahmpIO%t2mxy              ) ! 2m grid-mean temperature
@@ -336,7 +336,7 @@ contains
        if ( allocated (NoahmpIO%hgt_urb2d)  ) deallocate ( NoahmpIO%hgt_urb2d       )
        if ( allocated (NoahmpIO%ust)        ) deallocate ( NoahmpIO%ust             )
     endif
-         
+
     if(NoahmpIO%sf_urban_physics == 1 ) then  ! single layer urban model
        if ( allocated (NoahmpIO%cmr_sfcdif)   ) deallocate ( NoahmpIO%cmr_sfcdif    )
        if ( allocated (NoahmpIO%chr_sfcdif)   ) deallocate ( NoahmpIO%chr_sfcdif    )
@@ -453,13 +453,24 @@ contains
 #ifdef WRF_HYDRO
     if ( allocated (NoahmpIO%infxsrt)   ) deallocate ( NoahmpIO%infxsrt             )
     if ( allocated (NoahmpIO%sfcheadrt) ) deallocate ( NoahmpIO%sfcheadrt           )
+    ! Buffers for NUOPC
+    if ( allocated (NoahmpIO%sfcheadrt_buf)) deallocate ( NoahmpIO%sfcheadrt_buf )
+    if ( allocated (NoahmpIO%smois1_buf)) deallocate ( NoahmpIO%smois1_buf)
+    if ( allocated (NoahmpIO%smois2_buf)) deallocate ( NoahmpIO%smois2_buf)
+    if ( allocated (NoahmpIO%smois3_buf)) deallocate ( NoahmpIO%smois3_buf)
+    if ( allocated (NoahmpIO%smois4_buf)) deallocate ( NoahmpIO%smois4_buf)
+    if ( allocated (NoahmpIO%sh2o1_buf))  deallocate ( NoahmpIO%sh2o1_buf)
+    if ( allocated (NoahmpIO%sh2o2_buf))  deallocate ( NoahmpIO%sh2o2_buf)
+    if ( allocated (NoahmpIO%sh2o3_buf))  deallocate ( NoahmpIO%sh2o3_buf)
+    if ( allocated (NoahmpIO%sh2o4_buf))  deallocate ( NoahmpIO%sh2o4_buf)
+
     if ( allocated (NoahmpIO%soldrain)  ) deallocate ( NoahmpIO%soldrain            )
     if ( allocated (NoahmpIO%qtiledrain)) deallocate ( NoahmpIO%qtiledrain          )
     if ( allocated (NoahmpIO%zwatble2d) ) deallocate ( NoahmpIO%zwatble2d           )
-#endif    
+#endif
 
     end associate
- 
+
   end subroutine NoahmpIOVarFinalizeDefault
 
 end module NoahmpIOVarFinalizeMod

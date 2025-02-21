@@ -1,0 +1,619 @@
+module mpas_atm_nuopc
+  ! This module connects NUOPC initialize, advance, and finalize to mpas-atm.
+
+  use mpas_derived_types, only: core_type, domain_type, block_type, &
+       mpas_pool_type, mpas_time_type
+  use mpas_kind_types, only: rkind, r8kind, strkind
+  use mpas_nuopc_utils, only: check, printa, gridCreate
+  use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
+  use atm_core, only: atm_core_run_start, atm_core_run_advance
+  use esmf
+  use nuopc
+  use nuopc_model, modelSS => SetServices, modelSVM => SetVM
+  implicit none
+
+  private
+
+  ! NUOPC variables
+  ! type(ESMF_State) :: importState, exportState
+  type(ESMF_Grid)  :: mpas_grid
+
+  ! mpas_init arguments
+  type (core_type), pointer :: corelist => null()
+  type (domain_type), pointer :: domain => null()
+
+  ! mpas atm_core_run_start variables
+  type (block_type), pointer :: block
+  real (kind=RKIND), pointer :: dt
+  logical, pointer :: config_do_restart
+  character (len=StrKIND), pointer :: config_restart_timestamp_name
+  real (kind=R8KIND) :: diag_start_time, diag_stop_time
+  real (kind=R8KIND) :: input_start_time, input_stop_time
+  real (kind=R8KIND) :: output_start_time, output_stop_time
+  type (mpas_pool_type), pointer :: state, diag, diag_physics, mesh
+  type (mpas_pool_type), pointer :: tend, tend_physics
+  logical, pointer :: config_apply_lbcs
+  type (MPAS_Time_Type) :: currTime
+  character(len=StrKIND) :: timeStamp
+  integer :: itimestep
+  ! mpas atm_core_run_advance variables
+  type (block_type), pointer :: block_ptr
+  character(len=StrKIND) :: input_stream, read_time
+  integer :: stream_dir
+  real (kind=R8KIND) :: integ_start_time, integ_stop_time
+  logical :: io_rank = .false.
+
+  character(len=ESMF_MAXSTR), parameter :: file = __FILE__
+
+  ! public SetServices
+  public SetVM, SetServices
+
+contains
+  subroutine SetServices(model, rc)
+    type(ESMF_GridComp)  :: model
+    integer, intent(out) :: rc
+
+    ! local variables
+    type(ESMF_Config)         :: config
+    type(ESMF_HConfig)        :: hconfig, hconfigNode
+    character(80)             :: compLabel
+    character(:), allocatable :: badKey
+    logical                   :: isFlag
+    rc = ESMF_SUCCESS
+
+    ! derive from NUOPC_Model
+    call NUOPC_CompDerive(model, modelSS, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    ! specialize model
+    call NUOPC_CompSpecialize(model, specLabel=label_Advertise, &
+         specRoutine=Advertise, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call NUOPC_CompSpecialize(model, specLabel=label_RealizeProvided, &
+         specRoutine=Realize, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call NUOPC_CompSpecialize(model, specLabel=label_SetClock, &
+         specRoutine=SetClock, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call NUOPC_CompSpecialize(model, specLabel=label_Advance, &
+         specRoutine=Advance, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call NUOPC_CompSpecialize(model, specLabel=label_Finalize, &
+         specRoutine=Finalize, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+
+    ! validate config
+    call ESMF_GridCompGet(model, name=compLabel, configIsPresent=isFlag, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    if (isFlag) then
+       ! Config present, assert it is in the ESMX YAML format
+       call ESMF_GridCompGet(model, config=config, rc=rc)
+       if (check(rc, __LINE__, file)) return
+
+       call ESMF_ConfigGet(config, hconfig=hconfig, rc=rc)
+       if (check(rc, __LINE__, file)) return
+
+       hconfigNode = ESMF_HConfigCreateAt(hconfig, keyString=compLabel, rc=rc)
+       if (check(rc, __LINE__, file)) return
+
+       ! component responsibility to validate ESMX handled options here, and
+       ! potentially locally handled options
+       isFlag = ESMF_HConfigValidateMapKeys(hconfigNode, &
+            vocabulary=["model        ", &  ! ESMX handled option
+            "petList      ", &  ! ESMX handled option
+            "ompNumThreads", &  ! ESMX handled option
+            "attributes   "  &  ! ESMX handled option
+            ], badKey=badKey, rc=rc)
+       if (check(rc, __LINE__, file)) return
+
+       if (.not.isFlag) then
+          call ESMF_LogSetError(ESMF_RC_ARG_WRONG, &
+               msg="An invalid key was found in config under " &
+               //trim(compLabel)// &
+               " (maybe a typo?): "//badKey, &
+               line=__LINE__, &
+               file=__FILE__) !, rcToReturn=rc)
+          return
+       endif
+    endif
+
+  end subroutine SetServices
+
+
+  ! advertise the fields
+  subroutine Advertise(model, rc)
+    use mpi
+    use mpas_nuopc_fields, only : advertise_fields, get_field_list, &
+         cap_field_t, add_field_dictionary
+    use mpas_derived_types, only : core_type, domain_type
+    use mpas_atmphys_vars, only: mpas_noahmp
+    type(ESMF_GridComp) :: model
+    integer, intent(out) :: rc
+    ! local variables
+    type(ESMF_VM) :: vm
+    type(ESMF_State) :: importState, exportState
+    type(cap_field_t), allocatable, target :: field_list(:)
+    integer :: rank,EXTERNAL_COMM_WORLD
+
+    ! debugging
+    integer :: ierr
+    logical :: flag
+
+    rc = ESMF_SUCCESS
+    call ESMF_LogWrite("MPAS: entering Advertise", ESMF_LOGMSG_INFO, rc=rc)
+
+    call MPI_Initialized(flag, ierr)
+
+    if (flag .eqv. .true.) then
+       print *, "MPI is already initialized."
+    else
+       print *, "MPI is NOT initialized."
+    end if
+
+    call ESMF_LogWrite("MPAS: calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+
+    call ESMF_GridCompGet(model, vm=vm, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call ESMF_VMGet(vm, localPet=rank, &
+      mpiCommunicator=EXTERNAL_COMM_WORLD, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    print *, "MPAS: rank =", rank
+    if (rank == 0) io_rank = .true.
+
+
+    call mpas_init(corelist, domain, external_comm=EXTERNAL_COMM_WORLD)
+    call ESMF_LogWrite("MPAS: finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+
+
+    call NUOPC_ModelGet(model, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+
+    field_list = get_field_list(mpas=.true.)
+    call add_field_dictionary(field_list, rc)
+    if (check(rc, __LINE__, file)) return
+    call advertise_fields(model, field_list, importState, exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (check(rc, __LINE__, file)) return
+    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    print *, "MPAS: Exiting Advertise"
+    call ESMF_LogWrite("MPAS: exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
+
+  end subroutine Advertise
+
+  !-----------------------------------------------------------------------------
+
+  subroutine Realize(model, rc)
+    use mpas_nuopc_fields, only : realize_fields, get_field_list, cap_field_t
+    type(ESMF_GridComp) :: model
+    integer, intent(out) :: rc
+
+    ! local variables
+    type(ESMF_State)        :: importState, exportState
+!     type(ESMF_TimeInterval) :: stabilityTimeStep
+!     type(ESMF_Field)        :: field
+!     type(ESMF_Grid)         :: gridIn, gridOut
+!     type(ESMF_Mesh)         :: meshIn, meshOut
+!     type(ESMF_LocStream)    :: locsIn, locsOut
+
+!     integer, parameter              :: totalNumPoints=100
+!     integer(ESMF_KIND_I4), pointer  :: mask(:)
+!     real(ESMF_KIND_R8), pointer     :: lon(:), lat(:)
+!     real(ESMF_KIND_R8), pointer     :: fptr(:)
+!     integer                         :: clb(1), cub(1), i
+!     type(ESMF_VM)                   :: vm
+    type(cap_field_t), allocatable, target :: field_list(:)
+
+
+    rc = ESMF_SUCCESS
+
+    call ESMF_LogWrite("MPAS: entering Realize", ESMF_LOGMSG_INFO, rc=rc)
+
+    call NUOPC_ModelGet(model, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+
+    field_list = get_field_list()
+    call realize_fields(model, domain, field_list, importState, exportState, &
+         realizeAllImport=.false., realizeAllExport=.true., rc=rc)
+
+    ! ! create Grid objects for Fields
+    ! gridIn = ESMF_GridCreateNoPeriDimUfrm(maxIndex=(/100, 20/), &
+    !      minCornerCoord=(/10._ESMF_KIND_R8, 20._ESMF_KIND_R8/), &
+    !      maxCornerCoord=(/100._ESMF_KIND_R8, 200._ESMF_KIND_R8/), &
+    !      coordSys=ESMF_COORDSYS_CART, &
+    !      staggerLocList=(/ESMF_STAGGERLOC_CENTER, ESMF_STAGGERLOC_CORNER/), &
+    !      rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    ! gridOut = gridIn ! for now out same as in
+
+    ! ! create Mesh objects for Fields
+    ! meshIn = ESMF_MeshCreate(grid=gridIn, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    ! meshOut = ESMF_MeshCreate(grid=gridOut, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! create LocStream objects for Fields
+    ! locsIn=ESMF_LocStreamCreate(name="Equatorial Measurements", &
+    !      maxIndex=totalNumPoints, coordSys=ESMF_COORDSYS_SPH_DEG, &
+    !      indexFlag=ESMF_INDEX_GLOBAL, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! Add key data (internally allocating memory).
+    ! call ESMF_LocStreamAddKey(locsIn,                 &
+    !      keyName="ESMF:Lat",           &
+    !      KeyTypeKind=ESMF_TYPEKIND_R8, &
+    !      keyUnits="Degrees",           &
+    !      keyLongName="Latitude", rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_LocStreamAddKey(locsIn,                 &
+    !      keyName="ESMF:Lon",           &
+    !      KeyTypeKind=ESMF_TYPEKIND_R8, &
+    !      keyUnits="Degrees",           &
+    !      keyLongName="Longitude", rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_LocStreamAddKey(locsIn,                 &
+    !      keyName="ESMF:Mask",           &
+    !      KeyTypeKind=ESMF_TYPEKIND_I4, &
+    !      keyUnits="none",           &
+    !      keyLongName="mask values", rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! Get coordinate memory
+    ! call ESMF_LocStreamGetKey(locsIn,                 &
+    !      localDE=0,                    &
+    !      keyName="ESMF:Lat",           &
+    !      farray=lat,                   &
+    !      rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_LocStreamGetKey(locsIn,                 &
+    !      localDE=0,                    &
+    !      keyName="ESMF:Lon",           &
+    !      farray=lon,                   &
+    !      rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! Get mask memory
+    ! call ESMF_LocStreamGetKey(locsIn,                 &
+    !      localDE=0,                    &
+    !      keyName="ESMF:Mask",           &
+    !      farray=mask,                   &
+    !      rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! locsOut = locsIn ! for now out same as in
+
+! #ifdef WITHIMPORTFIELDS
+    ! ! importable field on Grid: air_pressure_at_sea_level
+    ! field = ESMF_FieldCreate(name="pmsl", grid=gridIn, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    ! call NUOPC_Realize(importState, field=field, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! importable field on Grid: surface_net_downward_shortwave_flux
+    ! field = ESMF_FieldCreate(name="rsns", grid=gridIn, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call NUOPC_Realize(importState, field=field, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! importable field on Mesh: precipitation_flux
+    ! field = ESMF_FieldCreate(name="precip", mesh=meshIn, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call NUOPC_Realize(importState, field=field, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+! #endif
+
+! #ifdef WITHEXPORTFIELDS
+    ! exportable field on Grid: sea_surface_temperature
+    ! field = ESMF_FieldCreate(name="sst", grid=gridOut, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_FieldFill(field, dataFillScheme="const", const1=100.d0,
+    ! rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call NUOPC_Realize(exportState, field=field, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+
+    ! ! exportable field on Mesh: sea_surface_salinity
+    ! field = ESMF_FieldCreate(name="sss", mesh=meshOut, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_FieldFill(field, dataFillScheme="const", const1=200.d0, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call NUOPC_Realize(exportState, field=field, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! exportable field on LocStream: sea_surface_height_above_sea_level
+    ! field = ESMF_FieldCreate(name="ssh", locstream=locsOut, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call NUOPC_Realize(exportState, field=field, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! Get Field memory
+    ! call ESMF_FieldGet(field, localDe=0, farrayPtr=fptr, &
+    !      computationalLBound=clb, computationalUBound=cub, rc=rc)
+    ! ! Set coordinate data and field data
+    ! do i=clb(1),cub(1)
+    !    lon(i)=(i-1)*360.0/REAL(totalNumPoints)
+    !    lat(i)=0.0
+    !    fptr(i)=lon(i)/360.0 ! Just set it to this for testing
+    !    mask(i)=0
+    !    ! Mask out range and make data bad
+    !    ! (Same range as in atm.F90)
+    !    if ((lon(i) > 10.0) .and. (lon(i) < 20.0)) then
+    !       mask(i)=1
+    !       fptr(i)=-10000.0 ! Bad value to check that mask works
+    !    endif
+    ! enddo
+! #endif
+
+    call ESMF_LogWrite("MPAS: exiting Realize", ESMF_LOGMSG_INFO, rc=rc)
+  end subroutine Realize
+
+  !-----------------------------------------------------------------------------
+
+  subroutine SetClock(model, rc)
+    use mpas_pool_routines, only: mpas_pool_get_config
+    use mpas_kind_types, only: rkind, strkind
+
+    type(ESMF_GridComp) :: model
+    integer, intent(out) :: rc
+
+    ! ! local variables
+    type(ESMF_Clock) :: clock
+    type(ESMF_TimeInterval) :: timeStep, duration
+    type(ESMF_Time) :: startTime, currentTime, stopTime, ds_t
+    character (len=strkind), pointer :: startTime_s, stopTime_s, duration_s
+    integer(ESMF_KIND_I4) :: dt_i, dt_sec
+
+    character(len=32) :: dateString
+    character(len=64) :: msg
+    integer :: ierr
+
+    rc = ESMF_SUCCESS
+
+    call ESMF_LogWrite("MPAS: entering SetClock", ESMF_LOGMSG_INFO, rc=rc)
+    ! query for clock
+    call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    ! initialize dt
+    call mpas_pool_get_config(domain%blocklist%configs, 'config_dt', dt)
+    dt_i = int(dt, kind=ESMF_KIND_I4)
+    call ESMF_TimeIntervalSet(timestep, s=dt_i, rc=rc) ! MPAS dt in seconds
+    if (check(rc, __LINE__, file)) return
+    call ESMF_ClockSet(clock, timeStep=timestep, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    ! ! initialize start time
+    ! call mpas_pool_get_config(domain%blocklist%configs, 'config_start_time', startTime_s)
+    ! print *, "starttime = ", trim(startTime_s)
+    ! call ESMF_TimeSet(startTime, timeString=startTime_s, rc=rc)
+    ! call ESMF_ClockSet(clock, startTime=startTime, rc=rc)
+
+    ! ! initialize end time
+    ! call mpas_pool_get_config(domain%blocklist%configs, 'config_run_duration', duration_s)
+    ! call ESMF_TimeIntervalSet(duration, timeIntervalString=duration_s, rc=rc) ! MPAS dt in seconds
+    ! if (check(rc, __LINE__, file)) return
+    ! stopTime = startTime + duration
+    ! call ESMF_ClockSet(clock, stopTime=stopTime, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    call NUOPC_CompSetClock(model, clock, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
+    if (check(rc, __LINE__, file)) return
+    call ESMF_ClockGet(clock, timestep=timestep, rc=rc)
+    call ESMF_TimeIntervalGet(timestep, s=dt_sec, rc=rc)
+    write(msg, '(A,I10)') 'ESMF timestep: ', dt_sec
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ClockGet(clock, currTime=currentTime, rc=rc)
+    call ESMF_TimeGet(currentTime, timeString=dateString, rc=rc)
+    msg = "ESMF current time: " // trim(dateString)
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ClockGet(clock, startTime=startTime, rc=rc)
+    call ESMF_TimeGet(startTime, timeString=dateString, rc=rc)
+    msg = "ESMF start time: " // trim(dateString)
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ClockGet(clock, stopTime=stopTime, rc=rc)
+    call ESMF_TimeGet(stopTime, timeString=dateString, rc=rc)
+    msg = "ESMF stop time: " // trim(dateString)
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_LogWrite("Should move atm_run_core_start to a P1? not in SetClock", ESMF_LOGMSG_INFO, rc=rc)
+    ierr = atm_core_run_start(domain, block_ptr, dt, config_do_restart, &
+         config_restart_timestamp_name, diag_start_time, diag_stop_time, &
+         state, diag, diag_physics, mesh, input_start_time, &
+         input_stop_time, output_start_time, output_stop_time, &
+         config_apply_lbcs, currTime, timestamp, itimestep)
+    print *, "atm_core_run_start ierr =", ierr
+
+    call ESMF_LogWrite("MPAS: exiting SetClock", ESMF_LOGMSG_INFO, rc=rc)
+  end subroutine SetClock
+
+  !-----------------------------------------------------------------------------
+
+  subroutine Advance(model, rc)
+    use mpas_atmphys_vars, only: mpas_noahmp
+    !$  use omp_lib
+    type(ESMF_GridComp)  :: model
+    integer, intent(out) :: rc
+
+    ! local variables
+    type(ESMF_Clock)            :: clock
+    type(ESMF_State)            :: importState, exportState
+    ! type(ESMF_Time)             :: currTime
+    ! type(ESMF_TimeInterval)     :: timeStep
+    ! type(ESMF_VM)               :: vm
+    ! integer                     :: currentSsiPe
+    ! character(len=160)          :: msgString
+    integer :: ierr
+
+    ! stop "DEBUGGING CLOCKS, STOPPING IN MPAS ADVANCE"
+    ! print *, "mpas_noahmp%sfcrunoff(1:4) =", mpas_noahmp%sfcrunoff(1:4)
+    ! stop "FOO mpas sfcrunoff investigation"
+
+    type(ESMF_Field) :: f
+    real(ESMF_KIND_R8), pointer :: ptr(:)
+
+    rc = ESMF_SUCCESS
+    call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+
+    call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (check(rc, __LINE__, file)) return
+    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+
+    ! this disappears after atm_core_run_advance
+    ! mpas_noahmp%sfcrunoff(:) = -888
+    ! this prints -888
+    ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
+    ! stop "hi"
+
+
+    if (io_rank) print *, "MPAS: itimestep =", itimestep
+    ! atm_core_run_advance takes a single timestep
+    ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
+         config_apply_lbcs, input_start_time, &
+         input_stop_time, output_start_time, output_stop_time, &
+         input_stream, read_time, stream_dir, &
+         integ_start_time, integ_stop_time, &
+         diag_start_time, diag_stop_time, &
+         dt, itimestep, state, mesh, diag, diag_physics, &
+         tend, tend_physics, config_restart_timestamp_name)
+    if (ierr /= 0) then
+       print *, "atm_core_run_advance ierr =", ierr
+       error stop "atm_core_run_advance ierr != 0"
+    end if
+    ! call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+
+
+    ! query for clock, importState and exportState
+    call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    ! ! Query for VM
+    ! call ESMF_GridCompGet(model, vm=vm, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_VMLog(vm, prefix="LUMO Advance(): ", &
+    !      logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! ! Now can use OpenMP for fine grained parallelism...
+    ! ! Here just write info about the PET-local OpenMP threads to Log.
+    ! !$omp parallel private(msgString, currentSsiPe)
+    ! !$omp critical
+    ! !$    call ESMF_VMGet(vm, currentSsiPe=currentSsiPe)
+    ! !$    write(msgString,'(A,I4,A,I4,A,I4,A,I4,A,I4)') &
+    ! !$      "thread_num=", omp_get_thread_num(), &
+    ! !$      "   currentSsiPe=", currentSsiPe, &
+    ! !$      "   num_threads=", omp_get_num_threads(), &
+    ! !$      "   max_threads=", omp_get_max_threads(), &
+    ! !$      "   num_procs=", omp_get_num_procs()
+    ! !$    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    ! !$omp end critical
+    ! !$omp end parallel
+
+    ! ! HERE THE MODEL ADVANCES: currTime -> currTime + timeStep
+
+    ! ! Because of the way that the internal Clock was set in SetClock(),
+    ! ! its timeStep is likely smaller than the parent timeStep. As a consequence
+    ! ! the time interval covered by a single parent timeStep will result in
+    ! ! multiple calls to the Advance() routine. Every time the currTime
+    ! ! will come in by one internal timeStep advanced. This goes until the
+    ! ! stopTime of the internal Clock has been reached.
+
+    ! call ESMF_ClockPrint(clock, options="currTime", &
+    !      preString="------>Advancing LUMO from: ", unit=msgString, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_ClockGet(clock, currTime=currTime, timeStep=timeStep, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_TimePrint(currTime + timeStep, &
+    !      preString="---------------------> to: ", unit=msgString, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
+    ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    call ESMF_LogWrite("MPAS: exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
+  end subroutine Advance
+
+
+  subroutine Finalize(model, rc)
+    type(ESMF_GridComp)  :: model
+    integer, intent(out) :: rc
+    rc = ESMF_SUCCESS
+    call ESMF_LogWrite("entering Finalize", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+    call mpas_finalize(corelist, domain)
+    call ESMF_LogWrite("finished mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("exiting Finalize", ESMF_LOGMSG_INFO, rc=rc)
+  end subroutine Finalize
+
+
+
+  subroutine SetVM(comp, rc)
+    type(ESMF_GridComp)   :: comp   ! must not be optional
+    integer, intent(out)  :: rc     ! must not be optional
+
+    ! type(ESMF_VM) :: vm
+    ! logical :: pthreadsEnabled
+
+    ! ! Test for Pthread support, all SetVM calls require it
+    ! call ESMF_VMGetGlobal(vm, rc=rc)
+    ! call ESMF_VMGet(vm, pthreadsEnabledFlag=pthreadsEnabled, rc=rc)
+
+    ! if (pthreadsEnabled) then
+    !    ! run PETs single-threaded
+    !    call ESMF_GridCompSetVMMinThreads(comp, rc=rc)
+    ! endif
+    rc = ESMF_SUCCESS
+  end subroutine SetVM
+end module mpas_atm_nuopc

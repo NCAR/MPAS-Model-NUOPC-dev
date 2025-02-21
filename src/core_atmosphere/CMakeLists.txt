@@ -24,6 +24,7 @@ set(ATMOSPHERE_CORE_PHYSICS_SOURCES
     mpas_atmphys_update.F
     mpas_atmphys_update_surface.F
     mpas_atmphys_utilities.F
+    mpas_atmphys_sfc_diagnostics.F
     mpas_atmphys_driver.F
     mpas_atmphys_driver_convection.F
     mpas_atmphys_driver_gwdo.F
@@ -347,7 +348,8 @@ set(ATMOSPHERE_CORE_INCLUDES
     structs_and_variables.inc)
 
 
-add_library(core_atmosphere ${ATMOSPHERE_CORE_SOURCES}
+add_library(core_atmosphere STATIC
+            ${ATMOSPHERE_CORE_SOURCES}
             ${ATMOSPHERE_CORE_PHYSICS_NOAMP_UTILITY_SOURCES}
             ${ATMOSPHERE_CORE_PHYSICS_NOAMP_MPAS_DRIVER_SOURCES}
             ${ATMOSPHERE_CORE_PHYSICS_NOAMP_SRC_SOURCES}
@@ -357,6 +359,12 @@ add_library(core_atmosphere ${ATMOSPHERE_CORE_SOURCES}
             ${ATMOSPHERE_CORE_PHYSICS_NOAA_SOURCES}
             ${ATMOSPHERE_CORE_DIAGNOSTIC_SOURCES}
             ${ATMOSPHERE_CORE_DYNAMICS_SOURCES})
+add_library(MPAS::core::core_atmosphere ALIAS core_atmosphere)
+target_include_directories(core_atmosphere
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
 set(CORE_ATMOSPHERE_COMPILE_DEFINITIONS
     mpas=1
@@ -398,3 +406,8 @@ target_link_libraries(mpas_atmosphere_build_tables PUBLIC core_atmosphere)
 mpas_fortran_target(mpas_atmosphere_build_tables)
 install(TARGETS mpas_atmosphere_build_tables EXPORT ${PROJECT_NAME}ExportsCore
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+
+if (NUOPC)
+  add_subdirectory(couple)
+endif()

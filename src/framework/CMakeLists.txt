@@ -36,7 +36,9 @@ set(MPAS_FRAMEWORK_SOURCES
         xml_stream_parser.c
         stream_inquiry.c)
 
-add_library(framework ${MPAS_FRAMEWORK_SOURCES})
+add_library(framework STATIC ${MPAS_FRAMEWORK_SOURCES})
+set_target_properties(framework PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 set_MPAS_DEBUG_flag(framework)
 set(FRAMEWORK_COMPILE_DEFINITIONS
     mpas=1
@@ -63,6 +65,7 @@ set(FRAMEWORK_LINK_LIBRARIES
         ${PROJECT_NAME}::external::ezxml
         ${IO_LIBS}
         PnetCDF::PnetCDF_Fortran
+        HDF5::HDF5 # is this needed?
         MPI::MPI_Fortran)
 
 if (MPAS_PROFILE)

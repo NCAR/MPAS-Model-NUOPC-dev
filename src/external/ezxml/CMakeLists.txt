@@ -1,5 +1,7 @@
 
-add_library(ezxml ezxml.c)
+add_library(ezxml STATIC ezxml.c)
+set_target_properties(ezxml PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_library(${PROJECT_NAME}::external::ezxml ALIAS ezxml)
 target_include_directories(ezxml PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 

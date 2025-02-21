@@ -24,7 +24,7 @@
  private
  public:: driver_lsm_noahmp
 
- 
+
  contains
 
 
@@ -47,9 +47,9 @@
  type(mpas_pool_type),intent(in):: diag_physics
  type(mpas_pool_type),intent(in):: diag_physics_noahmp
  type(mpas_pool_type),intent(in):: output_noahmp
- type(mpas_pool_type),intent(in):: sfc_input 
+ type(mpas_pool_type),intent(in):: sfc_input
 
- 
+
 !--- local variables and arrays:
  logical,pointer:: do_restart
 
@@ -72,7 +72,8 @@
                                          sfcrunoff,skintemp,smstav,smstot,udrunoff,snow,snowc,snowh,lai,z0, &
                                          znt
  real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
-
+!--- Hydro Variables
+ real(kind=RKIND),dimension(:),pointer:: sfcheadrt
 
 !--- local INOUT pointers (with no Noah LSM equivalent as defined in WRF):
  integer,dimension(:),pointer:: isnowxy
@@ -125,7 +126,7 @@
  mpas_noahmp%yr        = year
  mpas_noahmp%month     = month
  mpas_noahmp%day       = day
- mpas_noahmp%julian    = curr_julday 
+ mpas_noahmp%julian    = curr_julday
 
 
 !--- initialization of xice_threshold:
@@ -251,7 +252,11 @@
  call mpas_pool_get_array(diag_physics,'lai'       ,lai       )
  call mpas_pool_get_array(diag_physics,'z0'        ,z0        )
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
-
+ ! Hydro
+ call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt)
+ ! sfcheadrt is all 0s the first time
+ ! print *, "mpas mesh sfcrunoff", sfcheadrt
+ ! stop "investigating"
 
  do i = its,ite
     mpas_noahmp%tsk(i)       = skintemp(i)
@@ -275,8 +280,14 @@
     mpas_noahmp%lai(i)       = lai(i)
     mpas_noahmp%z0(i)        = z0(i)
     mpas_noahmp%znt(i)       = znt(i)
+    ! Hydro
+    if (.not. allocated(mpas_noahmp%sfcheadrt)) stop "noahmp sfcheadrt not allocated"
+    if (.not. associated(sfcheadrt)) stop "mpas sfcheadrt not associated"
+    ! mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
  enddo
 
+ ! print *, "smois ============", smois(1:2, 1:10)
+ ! stop "==="
  do ns = 1,nsoil
     do i = its,ite
        mpas_noahmp%sh2o(i,ns)    = sh2o(ns,i)
@@ -600,7 +611,7 @@
  call mpas_pool_get_array(diag,'pressure_p'            ,pressure_p)
  call mpas_pool_get_array(diag,'uReconstructZonal'     ,u         )
  call mpas_pool_get_array(diag,'uReconstructMeridional',v         )
- 
+
  call mpas_pool_get_array(state,'theta_m',theta_m,time_lev)
  call mpas_pool_get_array(state,'scalars',scalars,time_lev)
 
@@ -665,7 +676,8 @@
                                          sfcrunoff,skintemp,smstav,smstot,udrunoff,snow,snowc,snowh,lai,z0, &
                                          znt
  real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
-
+!--- Hydro
+ real(kind=RKIND),dimension(:),pointer:: sfcheadrt
 
  !--- local INOUT pointers (with no Noah LSM equivalent as defined in WRF):
  integer,dimension(:),pointer:: isnowxy
@@ -703,7 +715,7 @@
  nsoil = mpas_noahmp%nsoil
  nsnow = mpas_noahmp%nsnow
  nzsnow = nsnow + nsoil
-
+ print *, "mpash its ite", its, ite
 
 !--- update of INOUT variables (with generic LSM equivalent as defined in WRF), i.e. see
 !    lines 162-184 in module NoahmpIOVarType.F90):
@@ -732,7 +744,9 @@
  call mpas_pool_get_array(diag_physics,'lai'       ,lai       )
  call mpas_pool_get_array(diag_physics,'z0'        ,z0        )
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
-
+! Hydro
+ call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt )
+ print *, "sfcheadrt from mpas pool shape", shape(sfcheadrt)
 
  do i = its,ite
     skintemp(i)   = mpas_noahmp%tsk(i)
@@ -756,7 +770,11 @@
     lai(i)        = mpas_noahmp%lai(i)
     z0(i)         = mpas_noahmp%z0(i)
     znt(i)        = mpas_noahmp%znt(i)
+! Hydro
+    sfcheadrt(i)  = mpas_noahmp%sfcheadrt(i)
+    ! sfcheadrt(i)  = 0.888 ! this changes mesh to 0.888 after history.init
  enddo
+
 
  do ns = 1,nsoil
     do i = its,ite
@@ -1060,7 +1078,7 @@
  type(mpas_pool_type),intent(in):: diag
  type(mpas_pool_type),intent(in):: state
 
- integer,intent(in):: itimestep,its,ite
+ integer,intent(in):: itimestep, its, ite
  integer,intent(in):: time_lev
 
 !--- inout arguments:
@@ -1068,21 +1086,69 @@
  type(mpas_pool_type),intent(inout):: diag_physics_noahmp
  type(mpas_pool_type),intent(inout):: output_noahmp
  type(mpas_pool_type),intent(inout):: sfc_input
- 
 
+ integer :: i, ns
 !-----------------------------------------------------------------------------------------------------------------
 !call mpas_log_write(' ')
 !call mpas_log_write('--- enter subroutine driver_lsm_noahmp:')
 
+ ! this resets it!!!
  call lsm_noahmp_fromMPAS(configs,mesh,diag,diag_physics,diag_physics_noahmp,output_noahmp,sfc_input, &
                           state,time_lev,itimestep)
 
+! #1  0x430e83 in __mpas_atmphys_driver_MOD_physics_driver
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/physics/mpas_atmphys_driver.F:296
+! #2  0x41e179 in __atm_core_MOD_atm_do_timestep
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:1099
+! #3  0x41effe in __atm_core_MOD_atm_core_run_advance
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:826
+! #4  0x414383 in advance
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/couple/nuopc/mpas_atm_nuopc.F90:565
+
+ ! we pass its and ite in but lates get it from mpas_noahmp??
+ print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
+
+ if (mpas_noahmp%sfcheadrt_import_l) then
+    mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
+ end if
+ if (mpas_noahmp%smc_import_l) then
+    mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
+    mpas_noahmp%smois(its:ite,2) = mpas_noahmp%smois2_buf(its:ite)
+    mpas_noahmp%smois(its:ite,3) = mpas_noahmp%smois3_buf(its:ite)
+    mpas_noahmp%smois(its:ite,4) = mpas_noahmp%smois4_buf(its:ite)
+ end if
+ if (mpas_noahmp%sh2o_import_l) then
+    mpas_noahmp%sh2o(its:ite,1) = mpas_noahmp%sh2o1_buf(its:ite)
+    mpas_noahmp%sh2o(its:ite,2) = mpas_noahmp%sh2o2_buf(its:ite)
+    mpas_noahmp%sh2o(its:ite,3) = mpas_noahmp%sh2o3_buf(its:ite)
+    mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
+ end if
+
+ ! print *, "pre NoahmpDriverMain(mpas_noahmp) infxsrt =", &
+ !      mpas_noahmp%infxsrt(40:50)
  call NoahmpDriverMain(mpas_noahmp)
 
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
 
-!call mpas_log_write('--- end subroutine driver_lsm_noahmp:')
+ ! if (mpas_noahmp%sfcheadrt_import_l) then
+ !    mpas_noahmp%sfcheadrt_buf(its:ite) = mpas_noahmp%sfcheadrt(its:ite)
+ ! end if
 
+ if (mpas_noahmp%smc_export_l) then
+    mpas_noahmp%smois1_buf(its:ite) = mpas_noahmp%smois(its:ite,1)
+    mpas_noahmp%smois2_buf(its:ite) = mpas_noahmp%smois(its:ite,2)
+    mpas_noahmp%smois3_buf(its:ite) = mpas_noahmp%smois(its:ite,3)
+    mpas_noahmp%smois4_buf(its:ite) = mpas_noahmp%smois(its:ite,4)
+ end if
+ if (mpas_noahmp%sh2o_export_l) then
+    mpas_noahmp%sh2o1_buf(its:ite) = mpas_noahmp%sh2o(its:ite,1)
+    mpas_noahmp%sh2o2_buf(its:ite) = mpas_noahmp%sh2o(its:ite,2)
+    mpas_noahmp%sh2o3_buf(its:ite) = mpas_noahmp%sh2o(its:ite,3)
+    mpas_noahmp%sh2o4_buf(its:ite) = mpas_noahmp%sh2o(its:ite,4)
+ end if
+
+
+ !call mpas_log_write('--- end subroutine driver_lsm_noahmp:')
  end subroutine driver_lsm_noahmp
 
 !=================================================================================================================

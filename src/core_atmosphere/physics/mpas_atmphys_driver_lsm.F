@@ -20,7 +20,7 @@
  use module_sf_noahdrv
  use module_sf_noah_seaice_drv
  use module_sf_sfcdiags
- 
+
  implicit none
  private
  public:: init_lsm,       &
@@ -28,14 +28,14 @@
           deallocate_lsm, &
           driver_lsm
 
- 
+
  logical,parameter:: rdmaxalb = .false. !use snow albedo from geogrid;false use table values
  logical,parameter:: myj      = .false. !true if using Mellor-Yamada PBL scheme.
  logical,parameter:: frpcpn   = .false.
  logical,parameter:: rdlai2d  = .false.
 
 !urban physics: MPAS does not plan to run the urban physics option.
- integer,parameter:: sf_urban_physics = 0 !activate urban canopy model (=0: no urban canopy) 
+ integer,parameter:: sf_urban_physics = 0 !activate urban canopy model (=0: no urban canopy)
 
 
 !MPAS driver for parameterization of land surface processes.
@@ -145,7 +145,7 @@
  if(.not.allocated(gsw_p)       ) allocate(gsw_p(ims:ime,jms:jme)       )
  if(.not.allocated(hfx_p)       ) allocate(hfx_p(ims:ime,jms:jme)       )
  if(.not.allocated(lai_p)       ) allocate(lai_p(ims:ime,jms:jme)       )
- if(.not.allocated(lh_p)        ) allocate(lh_p(ims:ime,jms:jme)        ) 
+ if(.not.allocated(lh_p)        ) allocate(lh_p(ims:ime,jms:jme)        )
  if(.not.allocated(noahres_p)   ) allocate(noahres_p(ims:ime,jms:jme)   )
  if(.not.allocated(potevp_p)    ) allocate(potevp_p(ims:ime,jms:jme)    )
  if(.not.allocated(qfx_p)       ) allocate(qfx_p(ims:ime,jms:jme)       )
@@ -447,7 +447,7 @@
  enddo
 
  if(config_microp_scheme .ne. 'off') then
-    call mpas_pool_get_array(diag_physics,'sr'     ,sr     ) 
+    call mpas_pool_get_array(diag_physics,'sr'     ,sr     )
     call mpas_pool_get_array(diag_physics,'rainncv',rainncv)
 
     do j = jts,jte
@@ -474,7 +474,7 @@
  enddo
 
  end subroutine lsm_from_MPAS
- 
+
 !=================================================================================================================
  subroutine lsm_to_MPAS(configs,mesh,diag_physics,sfc_input,its,ite)
 !=================================================================================================================
@@ -621,7 +621,7 @@
  enddo
 
  if(config_microp_scheme .ne. 'off') then
-    call mpas_pool_get_array(diag_physics,'sr',sr) 
+    call mpas_pool_get_array(diag_physics,'sr',sr)
 
     do j = jts,jte
     do i = its,ite
@@ -631,7 +631,7 @@
  endif
 
  end subroutine lsm_to_MPAS
- 
+
 !=================================================================================================================
  subroutine init_lsm(dminfo,mesh,configs,diag_physics,sfc_input)
 !=================================================================================================================
@@ -656,9 +656,9 @@
 
     case ("sf_noah")
        call noah_init_forMPAS(dminfo,mesh,configs,diag_physics,sfc_input)
-    
+
     case default
- 
+
  end select lsm_select
 
  end subroutine init_lsm
@@ -746,6 +746,9 @@
                 ids = ids , ide = ide , jds = jds , jde = jde , kds = kds , kde = kde ,             &
                 ims = ims , ime = ime , jms = jms , jme = jme , kms = kms , kme = kme ,             &
                 its = its , ite = ite , jts = jts , jte = jte , kts = kts , kte = kte               &
+#ifdef WRF_HYDRO
+               ,sfcheadrt = sfcheadrt , INFXSRT = INFXSRT , soldrain = soldrain                     &
+#endif
                )
        call mpas_timer_stop('sf_noah')
 

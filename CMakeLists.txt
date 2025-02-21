@@ -11,7 +11,9 @@ include(GNUInstallDirs)
 
 # Options
 set(MPAS_ALL_CORES atmosphere init_atmosphere)
-set(MPAS_CORES atmosphere CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}")
+set(MPAS_CORES atmosphere init_atmosphere CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}")
+# set(MPAS_CORES atmosphere init_atmosphere CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}")
+
 if(MPAS_CORES MATCHES " ") #Convert strings separated with spaces to CMake list separated with ';'
     string(REPLACE " " ";" MPAS_CORES ${MPAS_CORES})
     set(MPAS_CORES ${MPAS_CORES} CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}" FORCE)
@@ -22,6 +24,8 @@ option(MPAS_PROFILE "Enable GPTL profiling" OFF)
 option(MPAS_OPENMP "Enable OpenMP" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(MPAS_USE_PIO "Build with PIO I/O library" OFF)
+option(MPAS_HYDRO "Enable MPAS-Hydro" OFF)
+option(NUOPC "Enable NUOPC" OFF)
 
 message(STATUS "[OPTION] MPAS_CORES: ${MPAS_CORES}")
 message(STATUS "[OPTION] MPAS_DOUBLE_PRECISION: ${MPAS_DOUBLE_PRECISION}")
@@ -29,6 +33,8 @@ message(STATUS "[OPTION] MPAS_PROFILE: ${MPAS_PROFILE}")
 message(STATUS "[OPTION] MPAS_OPENMP: ${MPAS_OPENMP}")
 message(STATUS "[OPTION] BUILD_SHARED_LIBS: ${BUILD_SHARED_LIBS}")
 message(STATUS "[OPTION] MPAS_USE_PIO: ${MPAS_USE_PIO}")
+message(STATUS "[OPTION] MPAS_HYDRO: ${MPAS_HYDRO}")
+message(STATUS "[OPTION] NUOPC: ${NUOPC}")
 
 # Build product output locations
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -68,10 +74,22 @@ endif()
 find_package(MPI REQUIRED COMPONENTS Fortran)
 
 find_package(PnetCDF REQUIRED COMPONENTS Fortran)
+if(MPAS_HYDRO)
+    add_compile_definitions(WRF_HYDRO) # macro for NoahMP
+    set(NUOPC ON)
+endif()
+if(NUOPC)
+    find_package(ESMF REQUIRED)
+    set(MPAS_USE_PIO ON)
+endif()
 if(MPAS_USE_PIO)
     find_package(PIO REQUIRED COMPONENTS Fortran C)
     find_package(NetCDF REQUIRED COMPONENTS Fortran C)
 endif()
+
+set(HDF5_PREFER_PARALLEL TRUE)
+find_package(HDF5 REQUIRED)
+message(STATUS "HDF5 Parallel: ${HDF5_IS_PARALLEL}")
 if(MPAS_PROFILE)
     find_package(GPTL REQUIRED)
 endif()
@@ -85,7 +103,8 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "(Apple)?Clang" )
 elseif(CMAKE_C_COMPILER_ID MATCHES "NVHPC" )
     find_program(CPP_EXECUTABLE NAMES cpp REQUIRED)
 else()
-    message(STATUS "Unknown compiler: ${CMAKE_C_COMPILER_ID}")
+    message(STATUS "Unknown compiler id: ${CMAKE_C_COMPILER_ID}")
+    message(STATUS "Using C compiler: ${CMAKE_C_COMPILER}")
     set(CPP_EXECUTABLE ${CMAKE_C_COMPILER})
 endif()
 
@@ -108,10 +127,14 @@ endif()
 if(ESMF_FOUND)
   message(STATUS "Configure MPAS for external ESMF")
   add_definitions(-DMPAS_EXTERNAL_ESMF_LIB -DMPAS_NO_ESMF_INIT)
-  add_library(${PROJECT_NAME}::external::esmf ALIAS esmf)
+  add_library(${PROJECT_NAME}::external::esmf ALIAS ESMF::ESMF)
 else()
   message(STATUS "Configure MPAS for internal ESMF")
-  add_subdirectory(src/external/esmf_time_f90) # Target: MPAS::external::esmf_time
+  if (MPAS_HYDRO)
+    message(FATAL_ERROR "ESMF needs to be external for MPAS-HYDRO build")
+  else()
+    add_subdirectory(src/external/esmf_time_f90) # Target: MPAS::external::esmf_time
+  endif()
 endif()
 add_subdirectory(src/tools/input_gen) # Targets: namelist_gen, streams_gen
 add_subdirectory(src/tools/registry) # Targets: mpas_parse_<core_name>
@@ -121,6 +144,10 @@ add_subdirectory(src/operators) # Target: MPAS::operators
 foreach(_core IN LISTS MPAS_CORES)
     add_subdirectory(src/core_${_core}) # Target: MPAS::core::<core_name>
 endforeach()
+
+# if (MPAS_HYDRO)
+  # add_subdirectory(src/core_init_atmosphere)
+  # added in src/core_atmosphere (/couple/nuopc)
 
 ### Package config
 include(CMakePackageConfigHelpers)
