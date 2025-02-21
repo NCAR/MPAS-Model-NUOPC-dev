@@ -1,0 +1,4 @@
+[submodule "src/mpas_hydro"]
+	path = src/mpas_hydro
+	url = git@github.com:scrasmussen/wrf_hydro_nwm_public.git
+	branch = mpas-hydro
