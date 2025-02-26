@@ -58,6 +58,7 @@ set(FRAMEWORK_LINK_LIBRARIES
         PnetCDF::PnetCDF_Fortran
         NetCDF::NetCDF_Fortran
         NetCDF::NetCDF_C
+        HDF5::HDF5
         MPI::MPI_Fortran)
 
 if (MPAS_PROFILE)
