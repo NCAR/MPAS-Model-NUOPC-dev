@@ -14,10 +14,56 @@ The coupling mechanism will use [Earth System Modeling Framework](https://earths
 
 
 ## MPAS and MPAS-Hydro Build Process
+### Dependencies
+- MPI
+- Fortran NetCDF
+- ParallelIO
+- ESMF
+- OpenBLAS
+- CMake
+
+
+### Build
+#### Retrieve Code
 ```
 Retrieve repository
 $ git clone --branch mpas-hydro --recurse-submodules git@github.com:scrasmussen/MPAS-Model.git mpas-model
 $ cd mpas-model
+```
+
+#### Derecho Modules
+This is a working combination for GNU
+```
+$ module purge
+$ module load ncarenv/24.12 gcc/12.4.0 ncarcompilers cray-mpich cmake
+$ module load openblas parallelio esmf/8.8.0 netcdf-mpi/4.9.3 parallel-netcdf hdf5-mpi
+```
+
+<!-- #### ESMF Dependency -->
+<!-- ``` -->
+<!-- $ git clone --branch v8.8.0 --single-branch git@github.com:esmf-org/esmf.git -->
+
+<!-- $ ESMF_INSTALL_PREFIX=/path/to/install \ -->
+<!--   ESMF_COMPILER=intel \ -->
+<!--   ESMF_C=icx \ -->
+<!--   ESMF_CXX=icpx \ -->
+<!--   ESMF_F90=ifx \ -->
+<!--   ESMF_DIR=$(pwd) \ -->
+<!--   make -j4 -->
+<!-- ``` -->
+
+#### Build Code
+Note: the CMake `MPAS_HYDRO` option defaults to `OFF` so the user will want to
+make sure to enable it enable it with `-DMPAS_HYDRO=ON`.
+```
+$ mkdir build
+$ cd build
+$ cmake ../ \
+    -DMPAS_HYDRO=ON \
+    -DCMAKE_Fortran_COMPILER=gfortran \
+    -DCMAKE_C_COMPILER=gcc \
+    -DCMAKE_CXX_COMPILER=g++ \
+    -DPnetCDF_MODULE_DIR=$NCAR_ROOT_PARALLEL_NETCDF/include
 ```
 
 
