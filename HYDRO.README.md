@@ -54,16 +54,18 @@ $ module load openblas parallelio esmf/8.8.0 netcdf-mpi/4.9.3 parallel-netcdf hd
 
 #### Build Code
 ##### Make
-NOTE: *Currently Preferred* MPAS Makefile modified to use mpas-hydro's CMake build system.
+**NOTE: Currently Preferred**
+
+MPAS Makefile has been modified to use mpas-hydro's CMake build system.
 ```
-$ CORE=atmosphere \
-  MPAS_HYDRO=true \
-  USE_MPI_F08=false \
-  make gnu -j 4
+$ CORE=init_atmosphere USE_MPI_F08=false make gnu -j 4
+$ CORE=atmosphere MPAS_HYDRO=true USE_MPI_F08=false make gnu -j 4
+
 ```
 
 ##### CMake
-NOTE: *Test Only*
+**NOTE: Test Only**
+
 Note: the CMake `MPAS_HYDRO` option defaults to `OFF` so the user will want to
 make sure to enable it enable it with `-DMPAS_HYDRO=ON`.
 ```
@@ -106,4 +108,27 @@ mpas-model/
 │   ├──operators/
 │   └──tools/
 └──testing_and_setup/
+```
+
+
+# Tutorial
+## Running Idealized Case
+Following instructions from [MPAS Tutorial 2024](https://www2.mmm.ucar.edu/projects/mpas/tutorial/Howard2024/index.html)
+
+```
+Mountain wave case (199k)
+
+Setup Testcase
+$ wget https://www2.mmm.ucar.edu/projects/mpas/test_cases/v7.0/mountain_wave.tar.gz
+$ tar zxf mountain_wave.tar.gz
+$ cd mountain_wave
+
+Symlink the executables
+$ ln -s ../init_atmosphere_model .
+$ ln -s ../atmosphere_model .
+
+Run, choose an np such that the file mountain_wave.graph.info.part.{np} exists
+Note, mountain wave is small enough to run in serial, without MPI
+$ mpiexec -np 4 ./init_atmosphere_model
+$ mpiexec -np 4 ./atmosphere_model
 ```
