@@ -16,7 +16,7 @@ gnu:   # BUILDTARGET GNU Fortran, C, and C++ compilers
 	"CC_SERIAL = gcc" \
 	"CXX_SERIAL = g++" \
 	"FFLAGS_PROMOTION = -fdefault-real-8 -fdefault-double-8" \
-	"FFLAGS_OPT = -fallow-argument-mismatch -std=f2008 -O3 -ffree-line-length-none -fconvert=big-endian -ffree-form" \
+	"FFLAGS_OPT = -fallow-argument-mismatch -O3 -ffree-line-length-none -fconvert=big-endian -ffree-form" \
 	"CFLAGS_OPT = -O3" \
 	"CXXFLAGS_OPT = -O3" \
 	"LDFLAGS_OPT = -O3" \
@@ -1401,6 +1401,7 @@ mpas_hydro:
 	$(info "Adding MPAS-Hydro")
 	@if [ ! -f build_hydro/CMakeCache.txt ]; then \
 	cmake -S src/mpas_hydro -B build_hydro \
+		-DMPAS-Hydro=ON \
 		-DCMAKE_Fortran_COMPILER=$(FC) \
 		-DCMAKE_C_COMPILER=$(CC) \
 		-DCMAKE_CXX_COMPILER=$(CXX) \
