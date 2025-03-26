@@ -53,6 +53,17 @@ $ module load openblas parallelio esmf/8.8.0 netcdf-mpi/4.9.3 parallel-netcdf hd
 <!-- ``` -->
 
 #### Build Code
+##### Make
+NOTE: *Currently Preferred* MPAS Makefile modified to use mpas-hydro's CMake build system.
+```
+$ CORE=atmosphere \
+  MPAS_HYDRO=true \
+  USE_MPI_F08=false \
+  make gnu -j 4
+```
+
+##### CMake
+NOTE: *Test Only*
 Note: the CMake `MPAS_HYDRO` option defaults to `OFF` so the user will want to
 make sure to enable it enable it with `-DMPAS_HYDRO=ON`.
 ```

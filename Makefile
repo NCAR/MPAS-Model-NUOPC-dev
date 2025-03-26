@@ -16,7 +16,7 @@ gnu:   # BUILDTARGET GNU Fortran, C, and C++ compilers
 	"CC_SERIAL = gcc" \
 	"CXX_SERIAL = g++" \
 	"FFLAGS_PROMOTION = -fdefault-real-8 -fdefault-double-8" \
-	"FFLAGS_OPT = -std=f2008 -O3 -ffree-line-length-none -fconvert=big-endian -ffree-form" \
+	"FFLAGS_OPT = -fallow-argument-mismatch -std=f2008 -O3 -ffree-line-length-none -fconvert=big-endian -ffree-form" \
 	"CFLAGS_OPT = -O3" \
 	"CXXFLAGS_OPT = -O3" \
 	"LDFLAGS_OPT = -O3" \
@@ -1342,14 +1342,25 @@ endif
 	    exit 1; \
 	fi
 
-
+USE_MPI_F08 ?= auto
 mpi_f08_test:
 	@#
 	@# MPAS_MPI_F08 will be set to:
 	@#  0 if no mpi_f08 module support was detected
 	@#  1 if the MPI library provides an mpi_f08 module
 	@#
+	@# Manual override: turn off
+	$(if $(filter $(USE_MPI_F08),0 false), \
+		$(eval MPAS_MPI_F08 := 0) \
+	)
+
+	@# Manual override: turn on
+	$(if $(filter $(USE_MPI_F08),1 true), \
+		$(eval MPAS_MPI_F08 := 1) \
+	)
+
 	$(info Checking for mpi_f08 support...)
+	$(if $(filter $(USE_MPI_F08),auto), \
 	$(eval MPAS_MPI_F08 := $(shell $\
 		printf "program main\n$\
 		        &   use mpi_f08, only : MPI_Init, MPI_Comm, MPI_INTEGER, MPI_Datatype\n$\
@@ -1367,9 +1378,9 @@ mpi_f08_test:
 		else $\
 		    printf "0"; $\
 		fi $\
-	))
+	)))
 	$(if $(findstring 0,$(MPAS_MPI_F08)), $(eval MPI_F08_MESSAGE = "Using the mpi module."), )
-	$(if $(findstring 0,$(MPAS_MPI_F08)), $(info No working mpi_f08 module detected; using mpi module.))
+	$(if $(findstring 0,$(MPAS_MPI_F08)), $(info No working mpi_f08 module detected or turned off; using mpi module.))
 	$(if $(findstring 1,$(MPAS_MPI_F08)), $(eval override CPPFLAGS += -DMPAS_USE_MPI_F08), )
 	$(if $(findstring 1,$(MPAS_MPI_F08)), $(eval MPI_F08_MESSAGE = "Using the mpi_f08 module."), )
 	$(if $(findstring 1,$(MPAS_MPI_F08)), $(info mpi_f08 module detected.))
@@ -1382,6 +1393,25 @@ MAIN_DEPS = rebuild_check openmp_test openacc_test mpi_f08_test
 IO_MESSAGE = "Using the SMIOL library."
 override CPPFLAGS += "-DMPAS_SMIOL_SUPPORT"
 endif
+ifneq (,$(filter true 1,$(MPAS_HYDRO)))
+  MAIN_DEPS += mpas_hydro
+endif
+
+mpas_hydro:
+	$(info "Adding MPAS-Hydro")
+	@if [ ! -f build_hydro/CMakeCache.txt ]; then \
+	cmake -S src/mpas_hydro -B build_hydro \
+		-DCMAKE_Fortran_COMPILER=$(FC) \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_CXX_COMPILER=$(CXX) \
+		-DCMAKE_Fortran_FLAGS="$(FFLAGS)" \
+		-DCMAKE_C_FLAGS="$(CFLAGS)" \
+		-DCMAKE_CXX_FLAGS="$(CXXFLAGS)" \
+		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS)" \
+		-DCMAKE_BUILD_TYPE=Release; \
+	fi
+	cmake --build build_hydro -j4
+	$(info "Done MPAS-Hydro")
 
 mpas_main: $(MAIN_DEPS)
 	cd src; $(MAKE) FC="$(FC)" \
@@ -1427,7 +1457,11 @@ endif
 	@echo $(TIMER_MESSAGE)
 	@echo $(IO_MESSAGE)
 	@echo "*******************************************************************************"
-clean:
+clean_mpas_hydro:
+	@if [ -f build_hydro/CMakeCache.txt ]; then \
+	make clean -C build_hydro; \
+	fi
+clean: clean_mpas_hydro
 	cd src; $(MAKE) clean RM="$(RM)" CORE="$(CORE)" AUTOCLEAN="$(AUTOCLEAN)"
 	$(RM) $(EXE_NAME)
 	$(RM) namelist.$(NAMELIST_SUFFIX).defaults
@@ -1489,4 +1523,3 @@ errmsg:
 ifdef CORE
 	exit 1
 endif
-
