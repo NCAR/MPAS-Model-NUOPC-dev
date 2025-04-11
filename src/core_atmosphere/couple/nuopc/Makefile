@@ -17,7 +17,9 @@ DIR   := $(CURDIR)
 MPAS_INC_DIR := \
 -I../../../driver \
 -I../../../framework \
--I../../../operators
+-I../../../operators \
+-I${NCAR_ROOT_OPENBLAS}/lib \
+-lopenblas
 
 # ###########################
 # Include ESMFMKFILE fragment
@@ -383,10 +385,19 @@ nuopcdistclean: nuopcclean
 	make -C $(MODEL_MKDIR) -f $(MODEL_MK) clean
 	rm -f $(MODEL_LIB)
 
+
+driver:
+	# mpif90 esmApp.F90 -o mpas_hydro_model
+#	$(error "DEBUGGING BUILD ")
+	$(ESMF_F90COMPILER) $(MPAS_INC_DIR) $(ESMF_F90COMPILEOPTS) $(ESMF_F90COMPILEPATHS) $(ESMF_F90COMPILEFREECPP) $(ESMF_F90COMPILECPPFLAGS) -DESMF_VERSION_MAJOR=$(ESMF_VERSION_MAJOR) esmApp.F90 -o mpas_hydro_model $(CAP_OBJS) -L$(NCAR_LDFLAGS_ESMF) -lesmf $(LIBS) $(FCINCLUDES) -I$(NCAR_INC_PARALLELIO)  -I$(NCAR_LDFLAGS_PARALLEL_NETCDF) -lnetcdf -lnetcdff -lpiof -L$(NCAR_LDFLAGS_PARALLELIO)
+	mv mpas_hydro_model ../../../../
+
 # ##########
 # Clean  Cap
 # ##########
 
+clean: nuopcclean
+	rm -f *.mod
 nuopcclean:
 	@echo $(HR)
 	@echo "Cleaning Cap build..."
