@@ -80,7 +80,7 @@ if(EXISTS ${PnetCDF_CONFIG_EXE})
         endif()
     endforeach()
 
-    find_path(PnetCDF_MODULE_DIR NAMES PNETCDF.mod HINTS ${PnetCDF_PREFIX} ${PnetCDF_INCLUDE_DIR}
+    find_path(PnetCDF_MODULE_DIR NAMES pnetcdf.mod HINTS ${PnetCDF_PREFIX} ${PnetCDF_INCLUDE_DIR}
               PATH_SUFFIXES include include/pnetcdf module module/pnetcdf lib/pnetcdf/module NO_DEFAULT_PATH)
     if(PnetCDF_Fortran_FOUND AND NOT EXISTS ${PnetCDF_MODULE_DIR})
         message(WARNING "[PnetCDF] pnetcdf-config --has-fortran=yes, but could not find pnetcdf.mod.  Set PnetCDF_MODULE_DIR to path containing pnetcdf.mod")
