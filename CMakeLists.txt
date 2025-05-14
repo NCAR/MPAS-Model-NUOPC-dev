@@ -12,6 +12,8 @@ include(GNUInstallDirs)
 # Options
 set(MPAS_ALL_CORES atmosphere init_atmosphere)
 set(MPAS_CORES atmosphere CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}")
+# set(MPAS_CORES atmosphere init_atmosphere CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}")
+
 if(MPAS_CORES MATCHES " ") #Convert strings separated with spaces to CMake list separated with ';'
     string(REPLACE " " ";" MPAS_CORES ${MPAS_CORES})
     set(MPAS_CORES ${MPAS_CORES} CACHE STRING "MPAS cores to build. Options: ${MPAS_ALL_CORES}" FORCE)
@@ -117,9 +119,10 @@ add_subdirectory(src/operators) # Target: MPAS::operators
 foreach(_core IN LISTS MPAS_CORES)
     add_subdirectory(src/core_${_core}) # Target: MPAS::core::<core_name>
 endforeach()
-if (MPAS_HYDRO)
-  add_subdirectory(src/mpas_hydro/src)
-endif()
+
+# if (MPAS_HYDRO)
+  # add_subdirectory(src/core_init_atmosphere)
+  # added in src/core_atmosphere (/couple/nuopc)
 
 ### Package config
 include(CMakePackageConfigHelpers)
