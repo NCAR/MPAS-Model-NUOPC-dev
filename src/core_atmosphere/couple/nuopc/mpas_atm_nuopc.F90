@@ -1,9 +1,10 @@
 module mpas_atm_nuopc
   ! This module connects NUOPC initialize, advance, and finalize to mpas-atm.
 
+  ! use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use esmf
   use nuopc
-  use nuopc_model, only: modelSS => SetServices, modelSVM => SetVM
+  use nuopc_model, modelSS => SetServices, modelSVM => SetVM
   implicit none
 
   private
@@ -16,91 +17,72 @@ contains
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
 
-    ! ! local variables
-    ! type(ESMF_Config)         :: config
-    ! type(ESMF_HConfig)        :: hconfig, hconfigNode
-    ! character(80)             :: compLabel
-    ! character(:), allocatable :: badKey
-    ! logical                   :: isFlag
-    ! rc = ESMF_SUCCESS
+    ! local variables
+    type(ESMF_Config)         :: config
+    type(ESMF_HConfig)        :: hconfig, hconfigNode
+    character(80)             :: compLabel
+    character(:), allocatable :: badKey
+    logical                   :: isFlag
+    character(:), allocatable :: file
+    file = __FILE__
+    rc = ESMF_SUCCESS
 
-    ! ! derive from NUOPC_Model
-    ! call NUOPC_CompDerive(model, modelSS, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! derive from NUOPC_Model
+    call NUOPC_CompDerive(model, modelSS, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) &
+         return ! bail out
 
-    ! ! specialize model
-    ! call NUOPC_CompSpecialize(model, specLabel=label_Advertise, &
-    !      specRoutine=Advertise, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
-    ! call NUOPC_CompSpecialize(model, specLabel=label_RealizeProvided, &
-    !      specRoutine=Realize, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
-    ! call NUOPC_CompSpecialize(model, specLabel=label_SetClock, &
-    !      specRoutine=SetClock, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
-    ! call NUOPC_CompSpecialize(model, specLabel=label_Advance, &
-    !      specRoutine=Advance, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! specialize model
+    call NUOPC_CompSpecialize(model, specLabel=label_Advertise, &
+         specRoutine=Advertise, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-    ! ! validate config
-    ! call ESMF_GridCompGet(model, name=compLabel, configIsPresent=isFlag, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
-    ! if (isFlag) then
-    !    ! Config present, assert it is in the ESMX YAML format
-    !    call ESMF_GridCompGet(model, config=config, rc=rc)
-    !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !         line=__LINE__, &
-    !         file=__FILE__)) &
-    !         return  ! bail out
-    !    call ESMF_ConfigGet(config, hconfig=hconfig, rc=rc)
-    !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !         line=__LINE__, &
-    !         file=__FILE__)) &
-    !         return  ! bail out
-    !    hconfigNode = ESMF_HConfigCreateAt(hconfig, keyString=compLabel, rc=rc)
-    !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !         line=__LINE__, &
-    !         file=__FILE__)) &
-    !         return  ! bail out
-    !    ! component responsibility to validate ESMX handled options here, and
-    !    ! potentially locally handled options
-    !    isFlag = ESMF_HConfigValidateMapKeys(hconfigNode, &
-    !         vocabulary=["model        ", &  ! ESMX handled option
-    !         "petList      ", &  ! ESMX handled option
-    !         "ompNumThreads", &  ! ESMX handled option
-    !         "attributes   "  &  ! ESMX handled option
-    !         ], badKey=badKey, rc=rc)
-    !    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !         line=__LINE__, &
-    !         file=__FILE__)) &
-    !         return  ! bail out
-    !    if (.not.isFlag) then
-    !       call ESMF_LogSetError(ESMF_RC_ARG_WRONG, &
-    !            msg="An invalid key was found in config under "//trim(compLabel)// &
-    !            " (maybe a typo?): "//badKey, &
-    !            line=__LINE__, &
-    !            file=__FILE__, rcToReturn=rc)
-    !       return
-    !    endif
-    ! endif
+    call NUOPC_CompSpecialize(model, specLabel=label_RealizeProvided, &
+         specRoutine=Realize, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    call NUOPC_CompSpecialize(model, specLabel=label_SetClock, &
+         specRoutine=SetClock, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    call NUOPC_CompSpecialize(model, specLabel=label_Advance, &
+         specRoutine=Advance, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! validate config
+    call ESMF_GridCompGet(model, name=compLabel, configIsPresent=isFlag, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    if (isFlag) then
+       ! Config present, assert it is in the ESMX YAML format
+       call ESMF_GridCompGet(model, config=config, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+       call ESMF_ConfigGet(config, hconfig=hconfig, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+       hconfigNode = ESMF_HConfigCreateAt(hconfig, keyString=compLabel, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+       ! component responsibility to validate ESMX handled options here, and
+       ! potentially locally handled options
+       isFlag = ESMF_HConfigValidateMapKeys(hconfigNode, &
+            vocabulary=["model        ", &  ! ESMX handled option
+            "petList      ", &  ! ESMX handled option
+            "ompNumThreads", &  ! ESMX handled option
+            "attributes   "  &  ! ESMX handled option
+            ], badKey=badKey, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+       if (.not.isFlag) then
+          call ESMF_LogSetError(ESMF_RC_ARG_WRONG, &
+               msg="An invalid key was found in config under "//trim(compLabel)// &
+               " (maybe a typo?): "//badKey, &
+               line=__LINE__, &
+               file=__FILE__, rcToReturn=rc)
+          return
+       endif
+    endif
 
   end subroutine SetServices
 
@@ -108,75 +90,60 @@ contains
   subroutine Advertise(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
-
+    character(:), allocatable :: file
 !     ! local variables
 !     type(ESMF_State)        :: importState, exportState
 
-!     rc = ESMF_SUCCESS
+    file = __FILE__
+    rc = ESMF_SUCCESS
 
-!     ! query for importState and exportState
-!     call NUOPC_ModelGet(model, importState=importState, &
-!          exportState=exportState, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! --- this is from the hello world
+    ! call my_model_init()
+    ! ---
 
-!     ! Disabling the following macro, e.g. renaming to WITHIMPORTFIELDS_disable,
-!     ! will result in a model component that does not advertise any importable
-!     ! Fields. Use this if you want to drive the model independently.
+    ! query for importState and exportState
+    ! call NUOPC_ModelGet(model, importState=importState, &
+    !      exportState=exportState, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! Disabling the following macro, e.g. renaming to WITHIMPORTFIELDS_disable,
+    ! will result in a model component that does not advertise any importable
+    ! Fields. Use this if you want to drive the model independently.
 ! #define WITHIMPORTFIELDS
 ! #ifdef WITHIMPORTFIELDS
-!     ! importable field: air_pressure_at_sea_level
-!     call NUOPC_Advertise(importState, &
-!          StandardName="air_pressure_at_sea_level", name="pmsl", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! importable field: air_pressure_at_sea_level
+    ! call NUOPC_Advertise(importState, &
+    !      StandardName="air_pressure_at_sea_level", name="pmsl", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! importable field: surface_net_downward_shortwave_flux
-!     call NUOPC_Advertise(importState, &
-!          StandardName="surface_net_downward_shortwave_flux", name="rsns", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! importable field: surface_net_downward_shortwave_flux
+    ! call NUOPC_Advertise(importState, &
+    !      StandardName="surface_net_downward_shortwave_flux", name="rsns", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! importable field: precipitation_flux
-!     call NUOPC_Advertise(importState, &
-!          StandardName="precipitation_flux", name="precip", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! importable field: precipitation_flux
+    ! call NUOPC_Advertise(importState, &
+    !      StandardName="precipitation_flux", name="precip", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 ! #endif
 
 ! #define WITHEXPORTFIELDS
 ! #ifdef WITHEXPORTFIELDS
-!     ! exportable field: sea_surface_temperature
-!     call NUOPC_Advertise(exportState, &
-!          StandardName="sea_surface_temperature", name="sst", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! exportable field: sea_surface_temperature
+    ! call NUOPC_Advertise(exportState, &
+    !      StandardName="sea_surface_temperature", name="sst", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! exportable field: sea_surface_salinity
-!     call NUOPC_Advertise(exportState, &
-!          StandardName="sea_surface_salinity", name="sss", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! exportable field: sea_surface_salinity
+    ! call NUOPC_Advertise(exportState, &
+    !      StandardName="sea_surface_salinity", name="sss", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! exportable field: sea_surface_height_above_sea_level
-!     call NUOPC_Advertise(exportState, &
-!          StandardName="sea_surface_height_above_sea_level", name="ssh", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! exportable field: sea_surface_height_above_sea_level
+    ! call NUOPC_Advertise(exportState, &
+    !      StandardName="sea_surface_height_above_sea_level", &
+    !      name="ssh", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 ! #endif
 
   end subroutine Advertise
@@ -201,215 +168,158 @@ contains
 !     real(ESMF_KIND_R8), pointer     :: fptr(:)
 !     integer                         :: clb(1), cub(1), i
 !     type(ESMF_VM)                   :: vm
+    character(:), allocatable :: file
 
-!     rc = ESMF_SUCCESS
+    file = __FILE__
+    rc = ESMF_SUCCESS
 
-!     ! query for importState and exportState
-!     call NUOPC_ModelGet(model, importState=importState, &
-!          exportState=exportState, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! query for importState and exportState
+    ! call NUOPC_ModelGet(model, importState=importState, &
+    !      exportState=exportState, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! create Grid objects for Fields
-!     gridIn = ESMF_GridCreateNoPeriDimUfrm(maxIndex=(/100, 20/), &
-!          minCornerCoord=(/10._ESMF_KIND_R8, 20._ESMF_KIND_R8/), &
-!          maxCornerCoord=(/100._ESMF_KIND_R8, 200._ESMF_KIND_R8/), &
-!          coordSys=ESMF_COORDSYS_CART, &
-!          staggerLocList=(/ESMF_STAGGERLOC_CENTER, ESMF_STAGGERLOC_CORNER/), &
-!          rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     gridOut = gridIn ! for now out same as in
+    ! ! create Grid objects for Fields
+    ! gridIn = ESMF_GridCreateNoPeriDimUfrm(maxIndex=(/100, 20/), &
+    !      minCornerCoord=(/10._ESMF_KIND_R8, 20._ESMF_KIND_R8/), &
+    !      maxCornerCoord=(/100._ESMF_KIND_R8, 200._ESMF_KIND_R8/), &
+    !      coordSys=ESMF_COORDSYS_CART, &
+    !      staggerLocList=(/ESMF_STAGGERLOC_CENTER, ESMF_STAGGERLOC_CORNER/), &
+    !      rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! gridOut = gridIn ! for now out same as in
 
-!     ! create Mesh objects for Fields
-!     meshIn = ESMF_MeshCreate(grid=gridIn, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     meshOut = ESMF_MeshCreate(grid=gridOut, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! create Mesh objects for Fields
+    ! meshIn = ESMF_MeshCreate(grid=gridIn, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! meshOut = ESMF_MeshCreate(grid=gridOut, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! create LocStream objects for Fields
-!     locsIn=ESMF_LocStreamCreate(name="Equatorial Measurements", &
-!          maxIndex=totalNumPoints, coordSys=ESMF_COORDSYS_SPH_DEG, &
-!          indexFlag=ESMF_INDEX_GLOBAL, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     ! Add key data (internally allocating memory).
-!     call ESMF_LocStreamAddKey(locsIn,                 &
-!          keyName="ESMF:Lat",           &
-!          KeyTypeKind=ESMF_TYPEKIND_R8, &
-!          keyUnits="Degrees",           &
-!          keyLongName="Latitude", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call ESMF_LocStreamAddKey(locsIn,                 &
-!          keyName="ESMF:Lon",           &
-!          KeyTypeKind=ESMF_TYPEKIND_R8, &
-!          keyUnits="Degrees",           &
-!          keyLongName="Longitude", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call ESMF_LocStreamAddKey(locsIn,                 &
-!          keyName="ESMF:Mask",           &
-!          KeyTypeKind=ESMF_TYPEKIND_I4, &
-!          keyUnits="none",           &
-!          keyLongName="mask values", rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     ! Get coordinate memory
-!     call ESMF_LocStreamGetKey(locsIn,                 &
-!          localDE=0,                    &
-!          keyName="ESMF:Lat",           &
-!          farray=lat,                   &
-!          rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call ESMF_LocStreamGetKey(locsIn,                 &
-!          localDE=0,                    &
-!          keyName="ESMF:Lon",           &
-!          farray=lon,                   &
-!          rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     ! Get mask memory
-!     call ESMF_LocStreamGetKey(locsIn,                 &
-!          localDE=0,                    &
-!          keyName="ESMF:Mask",           &
-!          farray=mask,                   &
-!          rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     locsOut = locsIn ! for now out same as in
+    ! ! create LocStream objects for Fields
+    ! locsIn=ESMF_LocStreamCreate(name="Equatorial Measurements", &
+    !      maxIndex=totalNumPoints, coordSys=ESMF_COORDSYS_SPH_DEG, &
+    !      indexFlag=ESMF_INDEX_GLOBAL, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! Add key data (internally allocating memory).
+    ! call ESMF_LocStreamAddKey(locsIn,                 &
+    !      keyName="ESMF:Lat",           &
+    !      KeyTypeKind=ESMF_TYPEKIND_R8, &
+    !      keyUnits="Degrees",           &
+    !      keyLongName="Latitude", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call ESMF_LocStreamAddKey(locsIn,                 &
+    !      keyName="ESMF:Lon",           &
+    !      KeyTypeKind=ESMF_TYPEKIND_R8, &
+    !      keyUnits="Degrees",           &
+    !      keyLongName="Longitude", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call ESMF_LocStreamAddKey(locsIn,                 &
+    !      keyName="ESMF:Mask",           &
+    !      KeyTypeKind=ESMF_TYPEKIND_I4, &
+    !      keyUnits="none",           &
+    !      keyLongName="mask values", rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! Get coordinate memory
+    ! call ESMF_LocStreamGetKey(locsIn,                 &
+    !      localDE=0,                    &
+    !      keyName="ESMF:Lat",           &
+    !      farray=lat,                   &
+    !      rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call ESMF_LocStreamGetKey(locsIn,                 &
+    !      localDE=0,                    &
+    !      keyName="ESMF:Lon",           &
+    !      farray=lon,                   &
+    !      rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! Get mask memory
+    ! call ESMF_LocStreamGetKey(locsIn,                 &
+    !      localDE=0,                    &
+    !      keyName="ESMF:Mask",           &
+    !      farray=mask,                   &
+    !      rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! locsOut = locsIn ! for now out same as in
 
 ! #ifdef WITHIMPORTFIELDS
-!     ! importable field on Grid: air_pressure_at_sea_level
-!     field = ESMF_FieldCreate(name="pmsl", grid=gridIn, &
-!          typekind=ESMF_TYPEKIND_R8, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call NUOPC_Realize(importState, field=field, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! importable field on Grid: air_pressure_at_sea_level
+    ! field = ESMF_FieldCreate(name="pmsl", grid=gridIn, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! call NUOPC_Realize(importState, field=field, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! importable field on Grid: surface_net_downward_shortwave_flux
-!     field = ESMF_FieldCreate(name="rsns", grid=gridIn, &
-!          typekind=ESMF_TYPEKIND_R8, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call NUOPC_Realize(importState, field=field, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! importable field on Grid: surface_net_downward_shortwave_flux
+    ! field = ESMF_FieldCreate(name="rsns", grid=gridIn, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! importable field on Mesh: precipitation_flux
-!     field = ESMF_FieldCreate(name="precip", mesh=meshIn, &
-!          typekind=ESMF_TYPEKIND_R8, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call NUOPC_Realize(importState, field=field, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! call NUOPC_Realize(importState, field=field, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! importable field on Mesh: precipitation_flux
+    ! field = ESMF_FieldCreate(name="precip", mesh=meshIn, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call NUOPC_Realize(importState, field=field, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 ! #endif
 
 ! #ifdef WITHEXPORTFIELDS
-!     ! exportable field on Grid: sea_surface_temperature
-!     field = ESMF_FieldCreate(name="sst", grid=gridOut, &
-!          typekind=ESMF_TYPEKIND_R8, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call ESMF_FieldFill(field, dataFillScheme="const", const1=100.d0, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call NUOPC_Realize(exportState, field=field, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! ! exportable field on Grid: sea_surface_temperature
+    ! field = ESMF_FieldCreate(name="sst", grid=gridOut, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! exportable field on Mesh: sea_surface_salinity
-!     field = ESMF_FieldCreate(name="sss", mesh=meshOut, &
-!          typekind=ESMF_TYPEKIND_R8, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call ESMF_FieldFill(field, dataFillScheme="const", const1=200.d0, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call NUOPC_Realize(exportState, field=field, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
+    ! call ESMF_FieldFill(field, dataFillScheme="const", const1=100.d0,
+    ! rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     ! exportable field on LocStream: sea_surface_height_above_sea_level
-!     field = ESMF_FieldCreate(name="ssh", locstream=locsOut, &
-!          typekind=ESMF_TYPEKIND_R8, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     call NUOPC_Realize(exportState, field=field, rc=rc)
-!     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-!          line=__LINE__, &
-!          file=__FILE__)) &
-!          return  ! bail out
-!     ! Get Field memory
-!     call ESMF_FieldGet(field, localDe=0, farrayPtr=fptr, &
-!          computationalLBound=clb, computationalUBound=cub, rc=rc)
-!     ! Set coordinate data and field data
-!     do i=clb(1),cub(1)
-!        lon(i)=(i-1)*360.0/REAL(totalNumPoints)
-!        lat(i)=0.0
-!        fptr(i)=lon(i)/360.0 ! Just set it to this for testing
-!        mask(i)=0
-!        ! Mask out range and make data bad
-!        ! (Same range as in atm.F90)
-!        if ((lon(i) > 10.0) .and. (lon(i) < 20.0)) then
-!           mask(i)=1
-!           fptr(i)=-10000.0 ! Bad value to check that mask works
-!        endif
-!     enddo
+    ! call NUOPC_Realize(exportState, field=field, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! exportable field on Mesh: sea_surface_salinity
+    ! field = ESMF_FieldCreate(name="sss", mesh=meshOut, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call ESMF_FieldFill(field, dataFillScheme="const", const1=200.d0, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call NUOPC_Realize(exportState, field=field, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! exportable field on LocStream: sea_surface_height_above_sea_level
+    ! field = ESMF_FieldCreate(name="ssh", locstream=locsOut, &
+    !      typekind=ESMF_TYPEKIND_R8, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! call NUOPC_Realize(exportState, field=field, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! Get Field memory
+    ! call ESMF_FieldGet(field, localDe=0, farrayPtr=fptr, &
+    !      computationalLBound=clb, computationalUBound=cub, rc=rc)
+    ! ! Set coordinate data and field data
+    ! do i=clb(1),cub(1)
+    !    lon(i)=(i-1)*360.0/REAL(totalNumPoints)
+    !    lat(i)=0.0
+    !    fptr(i)=lon(i)/360.0 ! Just set it to this for testing
+    !    mask(i)=0
+    !    ! Mask out range and make data bad
+    !    ! (Same range as in atm.F90)
+    !    if ((lon(i) > 10.0) .and. (lon(i) < 20.0)) then
+    !       mask(i)=1
+    !       fptr(i)=-10000.0 ! Bad value to check that mask works
+    !    endif
+    ! enddo
 ! #endif
 
   end subroutine Realize
@@ -423,30 +333,24 @@ contains
     ! ! local variables
     ! type(ESMF_Clock)              :: clock
     ! type(ESMF_TimeInterval)       :: stabilityTimeStep
+    character(:), allocatable :: file
 
-    ! rc = ESMF_SUCCESS
+    file = __FILE__
+    rc = ESMF_SUCCESS
 
     ! ! query for clock
     ! call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! ! initialize internal clock
     ! ! here: parent Clock and stability timeStep determine actual model timeStep
     ! !TODO: stabilityTimeStep should be read in from configuation
     ! !TODO: or computed from internal Grid information
     ! call ESMF_TimeIntervalSet(stabilityTimeStep, m=5, rc=rc) ! 5 minute steps
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
     ! call NUOPC_CompSetClock(model, clock, stabilityTimeStep, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
   end subroutine SetClock
 
@@ -465,30 +369,23 @@ contains
     ! type(ESMF_VM)               :: vm
     ! integer                     :: currentSsiPe
     ! character(len=160)          :: msgString
+    character(:), allocatable :: file
 
-    ! rc = ESMF_SUCCESS
+    file = __FILE__
+    rc = ESMF_SUCCESS
 
     ! ! query for clock, importState and exportState
     ! call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
     !      exportState=exportState, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! ! Query for VM
     ! call ESMF_GridCompGet(model, vm=vm, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! call ESMF_VMLog(vm, prefix="LUMO Advance(): ", &
     !      logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! ! Now can use OpenMP for fine grained parallelism...
     ! ! Here just write info about the PET-local OpenMP threads to Log.
@@ -516,33 +413,20 @@ contains
 
     ! call ESMF_ClockPrint(clock, options="currTime", &
     !      preString="------>Advancing LUMO from: ", unit=msgString, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
     ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! call ESMF_ClockGet(clock, currTime=currTime, timeStep=timeStep, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! call ESMF_TimePrint(currTime + timeStep, &
     !      preString="---------------------> to: ", unit=msgString, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
     ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    !      line=__LINE__, &
-    !      file=__FILE__)) &
-    !      return  ! bail out
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
   end subroutine Advance
 
@@ -562,10 +446,18 @@ contains
     !    ! run PETs single-threaded
     !    call ESMF_GridCompSetVMMinThreads(comp, rc=rc)
     ! endif
-
     rc = ESMF_SUCCESS
-
   end subroutine SetVM
+
+
+  function check(rc, msg, line, file) result(res)
+    integer, intent(in) :: rc
+    character(len=*), intent(in) :: msg
+    integer, intent(in) :: line
+    character(len=*), intent(in) :: file
+    logical :: res
+    res = ESMF_LogFoundError(rcToCheck=rc, msg=msg, line=line, file=file)
+  end function check
 
 
 end module mpas_atm_nuopc
