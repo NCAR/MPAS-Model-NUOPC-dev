@@ -1,7 +1,7 @@
 module mpas_atm_nuopc
   ! This module connects NUOPC initialize, advance, and finalize to mpas-atm.
 
-  ! use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
+  use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use esmf
   use nuopc
   use nuopc_model, modelSS => SetServices, modelSVM => SetVM
@@ -49,6 +49,11 @@ contains
          specRoutine=Advance, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
+    call NUOPC_CompSpecialize(model, specLabel=label_Finalize, &
+         specRoutine=Finalize, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+
     ! validate config
     call ESMF_GridCompGet(model, name=compLabel, configIsPresent=isFlag, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -87,12 +92,18 @@ contains
   end subroutine SetServices
 
 
+  ! advertise the fields
   subroutine Advertise(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
     character(:), allocatable :: file
-!     ! local variables
-!     type(ESMF_State)        :: importState, exportState
+    ! ! local variables
+    !     type(ESMF_State)        :: importState, exportState
+
+    ! ! mpas_init arguments
+    ! type (core_type), pointer :: corelist => null()
+    ! type (domain_type), pointer :: domain => null()
+
 
     file = __FILE__
     rc = ESMF_SUCCESS
@@ -100,6 +111,9 @@ contains
     ! --- this is from the hello world
     ! call my_model_init()
     ! ---
+
+    call ESMF_LogWrite("FOO: call mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    ! call mpas_init(corelist, domain)
 
     ! query for importState and exportState
     ! call NUOPC_ModelGet(model, importState=importState, &
@@ -373,6 +387,9 @@ contains
 
     file = __FILE__
     rc = ESMF_SUCCESS
+    call ESMF_LogWrite("FOO: call mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+    ! call mpas_run(domain)
+
 
     ! ! query for clock, importState and exportState
     ! call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
@@ -429,6 +446,16 @@ contains
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
   end subroutine Advance
+
+
+  subroutine Finalize(model, rc)
+    type(ESMF_GridComp)  :: model
+    integer, intent(out) :: rc
+    rc = ESMF_SUCCESS
+    call ESMF_LogWrite("FOO: call mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
+    ! call mpas_finalize(corelist, domain)
+  end subroutine Finalize
+
 
 
   subroutine SetVM(comp, rc)
