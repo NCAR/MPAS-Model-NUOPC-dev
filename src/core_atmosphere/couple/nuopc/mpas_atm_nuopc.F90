@@ -29,8 +29,7 @@ contains
 
     ! derive from NUOPC_Model
     call NUOPC_CompDerive(model, modelSS, rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) &
-         return ! bail out
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! specialize model
     call NUOPC_CompSpecialize(model, specLabel=label_Advertise, &
