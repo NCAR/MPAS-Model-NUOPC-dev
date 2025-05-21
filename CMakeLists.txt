@@ -108,8 +108,9 @@ else()
   message(STATUS "Configure MPAS for internal ESMF")
   if (MPAS_HYDRO)
     message(FATAL_ERROR "ESMF needs to be external for MPAS-HYDRO build")
+  else()
+    add_subdirectory(src/external/esmf_time_f90) # Target: MPAS::external::esmf_time
   endif()
-  add_subdirectory(src/external/esmf_time_f90) # Target: MPAS::external::esmf_time
 endif()
 add_subdirectory(src/tools/input_gen) # Targets: namelist_gen, streams_gen
 add_subdirectory(src/tools/registry) # Targets: mpas_parse_<core_name>
