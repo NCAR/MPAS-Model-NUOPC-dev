@@ -93,15 +93,16 @@ contains
 
   ! advertise the fields
   subroutine Advertise(model, rc)
+    use mpas_derived_types, only : core_type, domain_type
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
     character(:), allocatable :: file
     ! ! local variables
     !     type(ESMF_State)        :: importState, exportState
 
-    ! ! mpas_init arguments
-    ! type (core_type), pointer :: corelist => null()
-    ! type (domain_type), pointer :: domain => null()
+    ! mpas_init arguments
+    type (core_type), pointer :: corelist => null()
+    type (domain_type), pointer :: domain => null()
 
 
     file = __FILE__
@@ -111,8 +112,20 @@ contains
     ! call my_model_init()
     ! ---
 
-    call ESMF_LogWrite("FOO: call mpas_init", ESMF_LOGMSG_INFO, rc=rc)
-    ! call mpas_init(corelist, domain)
+    call ESMF_LogWrite("calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call mpas_init(corelist, domain)
+
+    ! Get variables from MPAS
+
+    ! real, pointer :: qrainxy(:)
+    ! call mpas_pool_get_array( domain%diag, 'qrainxy', qrainxy )
+    ! call NUOPC_AdvertiseField(exportState, fieldPtr, &
+    !      standardName = "precipitation_flux", &
+    !      name         = "qrainxy", &
+    !      units        = "kg m-2 s-1", &
+    !      rc           = rc)
+
+
 
     ! query for importState and exportState
     ! call NUOPC_ModelGet(model, importState=importState, &
@@ -122,6 +135,8 @@ contains
     ! Disabling the following macro, e.g. renaming to WITHIMPORTFIELDS_disable,
     ! will result in a model component that does not advertise any importable
     ! Fields. Use this if you want to drive the model independently.
+
+
 ! #define WITHIMPORTFIELDS
 ! #ifdef WITHIMPORTFIELDS
     ! ! importable field: air_pressure_at_sea_level

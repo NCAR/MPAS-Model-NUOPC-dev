@@ -36,7 +36,9 @@ set(MPAS_FRAMEWORK_SOURCES
         xml_stream_parser.c
         stream_inquiry.c)
 
-add_library(framework ${MPAS_FRAMEWORK_SOURCES})
+add_library(framework STATIC ${MPAS_FRAMEWORK_SOURCES})
+set_target_properties(framework PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 set_MPAS_DEBUG_flag(framework)
 set(FRAMEWORK_COMPILE_DEFINITIONS
         USE_PIO2
@@ -52,8 +54,8 @@ set_target_properties(framework PROPERTIES OUTPUT_NAME mpas_framework)
 
 set(FRAMEWORK_LINK_LIBRARIES
         ${PROJECT_NAME}::external::esmf
-        ${PROJECT_NAME}::external::ezxml
-        PIO::PIO_Fortran
+        ezxml
+        PIO::PIO_Fortran_SHARED
         PIO::PIO_C
         PnetCDF::PnetCDF_Fortran
         NetCDF::NetCDF_Fortran
