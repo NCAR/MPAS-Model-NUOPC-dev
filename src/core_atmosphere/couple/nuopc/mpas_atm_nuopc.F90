@@ -83,7 +83,7 @@ contains
                msg="An invalid key was found in config under "//trim(compLabel)// &
                " (maybe a typo?): "//badKey, &
                line=__LINE__, &
-               file=__FILE__, rcToReturn=rc)
+               file=__FILE__) !, rcToReturn=rc)
           return
        endif
     endif
