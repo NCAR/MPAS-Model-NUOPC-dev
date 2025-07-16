@@ -97,6 +97,9 @@ function(mpas_fortran_target target)
         list(APPEND MPAS_FORTRAN_TARGET_COMPILE_OPTIONS_PUBLIC
                 $<$<COMPILE_LANGUAGE:Fortran>:-fconvert=big-endian>
         )
+        list(APPEND MPAS_FORTRAN_TARGET_COMPILE_OPTIONS_PUBLIC
+                $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none -cpp>
+        )
 
         if(CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
             list(APPEND MPAS_FORTRAN_TARGET_COMPILE_OPTIONS_PRIVATE
