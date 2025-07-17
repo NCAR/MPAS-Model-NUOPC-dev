@@ -1,6 +1,7 @@
 module mpas_atm_nuopc
   ! This module connects NUOPC initialize, advance, and finalize to mpas-atm.
 
+  use mpas_derived_types, only : core_type, domain_type
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use esmf
   use nuopc
@@ -8,6 +9,11 @@ module mpas_atm_nuopc
   implicit none
 
   private
+  ! mpas_init arguments
+  type (core_type), pointer :: corelist => null()
+  type (domain_type), pointer :: domain => null()
+
+
 
   ! public SetServices
   public SetVM, SetServices
@@ -93,6 +99,7 @@ contains
 
   ! advertise the fields
   subroutine Advertise(model, rc)
+    use mpi
     use mpas_derived_types, only : core_type, domain_type
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -100,9 +107,9 @@ contains
     ! ! local variables
     !     type(ESMF_State)        :: importState, exportState
 
-    ! mpas_init arguments
-    type (core_type), pointer :: corelist => null()
-    type (domain_type), pointer :: domain => null()
+    ! debugging
+    integer :: ierr
+    logical :: flag
 
 
     file = __FILE__
@@ -112,9 +119,19 @@ contains
     ! call my_model_init()
     ! ---
 
-    call ESMF_LogWrite("calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
-    call mpas_init(corelist, domain)
+    call MPI_Initialized(flag, ierr)
 
+    if (flag .eqv. .true.) then
+       print *, "✅ MPI is already initialized."
+    else
+       print *, "❌ MPI is NOT initialized."
+    end if
+
+    call ESMF_LogWrite("calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+
+    call mpas_init(corelist, domain, external_comm=MPI_COMM_WORLD)
+    call ESMF_LogWrite("finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
     ! Get variables from MPAS
 
     ! real, pointer :: qrainxy(:)
@@ -174,6 +191,7 @@ contains
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 ! #endif
 
+    call ESMF_LogWrite("exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Advertise
 
   !-----------------------------------------------------------------------------
@@ -401,9 +419,10 @@ contains
 
     file = __FILE__
     rc = ESMF_SUCCESS
-    call ESMF_LogWrite("FOO: call mpas_run", ESMF_LOGMSG_INFO, rc=rc)
-    ! call mpas_run(domain)
-
+    call ESMF_LogWrite("call mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+    call mpas_run(domain)
+    call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
 
     ! ! query for clock, importState and exportState
     ! call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
@@ -458,7 +477,7 @@ contains
 
     ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
+    call ESMF_LogWrite("exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Advance
 
 
@@ -466,8 +485,11 @@ contains
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
     rc = ESMF_SUCCESS
-    call ESMF_LogWrite("FOO: call mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
-    ! call mpas_finalize(corelist, domain)
+    call ESMF_LogWrite("call mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
+    call mpas_finalize(corelist, domain)
+    call ESMF_LogWrite("finished mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("exiting Finalize", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Finalize
 
 
