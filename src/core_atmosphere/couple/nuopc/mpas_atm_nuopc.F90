@@ -3,6 +3,7 @@ module mpas_atm_nuopc
 
   use mpas_derived_types, only : core_type, domain_type
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
+  use atm_core, only: atm_core_run_start, atm_core_run_advance
   use esmf
   use nuopc
   use nuopc_model, modelSS => SetServices, modelSVM => SetVM
@@ -114,6 +115,7 @@ contains
 
     file = __FILE__
     rc = ESMF_SUCCESS
+    call ESMF_LogWrite("entering Advertise", ESMF_LOGMSG_INFO, rc=rc)
 
     ! --- this is from the hello world
     ! call my_model_init()
@@ -373,31 +375,69 @@ contains
   !-----------------------------------------------------------------------------
 
   subroutine SetClock(model, rc)
-    type(ESMF_GridComp)  :: model
+    use mpas_pool_routines, only: mpas_pool_get_config
+    use mpas_kind_types, only: rkind, strkind
+
+    type(ESMF_GridComp) :: model
     integer, intent(out) :: rc
 
     ! ! local variables
-    ! type(ESMF_Clock)              :: clock
-    ! type(ESMF_TimeInterval)       :: stabilityTimeStep
+    type(ESMF_Clock) :: clock
+    type(ESMF_TimeInterval) :: timeStep, duration
+    type(ESMF_Time) :: startTime, currentTime, stopTime, ds_t
     character(:), allocatable :: file
+
+    ! MPAS related local variables
+    real (kind=rkind), pointer :: dt
+
+    character (len=strkind), pointer :: startTime_s, stopTime_s, duration_s
+    integer(ESMF_KIND_I4) :: dt_i, dt_sec
+
+    character(len=32) :: dateString
+    character(len=64) :: msg
 
     file = __FILE__
     rc = ESMF_SUCCESS
 
-    ! ! query for clock
-    ! call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    call ESMF_LogWrite("entering SetClock", ESMF_LOGMSG_INFO, rc=rc)
+    ! query for clock
+    call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-    ! ! initialize internal clock
-    ! ! here: parent Clock and stability timeStep determine actual model timeStep
-    ! !TODO: stabilityTimeStep should be read in from configuation
-    ! !TODO: or computed from internal Grid information
-    ! call ESMF_TimeIntervalSet(stabilityTimeStep, m=5, rc=rc) ! 5 minute steps
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! initialize dt
+    call mpas_pool_get_config(domain%blocklist%configs, 'config_dt', dt)
+    dt_i = int(dt, kind=ESMF_KIND_I4)
+    call ESMF_TimeIntervalSet(timestep, s=dt_i, rc=rc) ! MPAS dt in seconds
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    call ESMF_ClockSet(clock, timeStep=timestep, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-    ! call NUOPC_CompSetClock(model, clock, stabilityTimeStep, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    call NUOPC_CompSetClock(model, clock, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
+    call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    call ESMF_ClockGet(clock, timestep=timestep, rc=rc)
+    call ESMF_TimeIntervalGet(timestep, s=dt_sec, rc=rc)
+    write(msg, '(A,I10)') 'ESMF timestep: ', dt_sec
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ClockGet(clock, currTime=currentTime, rc=rc)
+    call ESMF_TimeGet(currentTime, timeString=dateString, rc=rc)
+    msg = "ESMF current time: " // trim(dateString)
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ClockGet(clock, startTime=startTime, rc=rc)
+    call ESMF_TimeGet(startTime, timeString=dateString, rc=rc)
+    msg = "ESMF start time: " // trim(dateString)
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ClockGet(clock, stopTime=stopTime, rc=rc)
+    call ESMF_TimeGet(stopTime, timeString=dateString, rc=rc)
+    msg = "ESMF stop time: " // trim(dateString)
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_LogWrite("exiting SetClock", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine SetClock
 
   !-----------------------------------------------------------------------------
@@ -421,8 +461,10 @@ contains
     rc = ESMF_SUCCESS
     call ESMF_LogWrite("call mpas_run", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
+    ! this mpas_run calls atm_core_run
     call mpas_run(domain)
     call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+
 
     ! ! query for clock, importState and exportState
     ! call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
