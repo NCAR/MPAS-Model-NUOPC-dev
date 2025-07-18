@@ -1,7 +1,9 @@
 module mpas_atm_nuopc
   ! This module connects NUOPC initialize, advance, and finalize to mpas-atm.
 
-  use mpas_derived_types, only : core_type, domain_type
+  use mpas_derived_types, only: core_type, domain_type, block_type, &
+       mpas_pool_type, mpas_time_type
+  use mpas_kind_types, only: rkind, r8kind, strkind
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use atm_core, only: atm_core_run_start, atm_core_run_advance
   use esmf
@@ -15,6 +17,25 @@ module mpas_atm_nuopc
   type (domain_type), pointer :: domain => null()
 
 
+  ! mpas atm_core_run_start variables
+  type (block_type), pointer :: block
+  real (kind=RKIND), pointer :: dt
+  logical, pointer :: config_do_restart
+  character (len=StrKIND), pointer :: config_restart_timestamp_name
+  real (kind=R8KIND) :: diag_start_time, diag_stop_time
+  real (kind=R8KIND) :: input_start_time, input_stop_time
+  real (kind=R8KIND) :: output_start_time, output_stop_time
+  type (mpas_pool_type), pointer :: state, diag, diag_physics, mesh
+  type (mpas_pool_type), pointer :: tend, tend_physics
+  logical, pointer :: config_apply_lbcs
+  type (MPAS_Time_Type) :: currTime
+  character(len=StrKIND) :: timeStamp
+  integer :: itimestep
+  ! mpas atm_core_run_advance variables
+  type (block_type), pointer :: block_ptr
+  character(len=StrKIND) :: input_stream, read_time
+  integer :: stream_dir
+  real (kind=R8KIND) :: integ_start_time, integ_stop_time
 
   ! public SetServices
   public SetVM, SetServices
@@ -134,8 +155,8 @@ contains
 
     call mpas_init(corelist, domain, external_comm=MPI_COMM_WORLD)
     call ESMF_LogWrite("finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
-    ! Get variables from MPAS
 
+    ! Get variables from MPAS
     ! real, pointer :: qrainxy(:)
     ! call mpas_pool_get_array( domain%diag, 'qrainxy', qrainxy )
     ! call NUOPC_AdvertiseField(exportState, fieldPtr, &
@@ -387,14 +408,12 @@ contains
     type(ESMF_Time) :: startTime, currentTime, stopTime, ds_t
     character(:), allocatable :: file
 
-    ! MPAS related local variables
-    real (kind=rkind), pointer :: dt
-
     character (len=strkind), pointer :: startTime_s, stopTime_s, duration_s
     integer(ESMF_KIND_I4) :: dt_i, dt_sec
 
     character(len=32) :: dateString
     character(len=64) :: msg
+    integer :: ierr
 
     file = __FILE__
     rc = ESMF_SUCCESS
@@ -437,6 +456,15 @@ contains
     msg = "ESMF stop time: " // trim(dateString)
     call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
 
+
+    call ESMF_LogWrite("Should move atm_run_core_start to a P1? not in SetClock", ESMF_LOGMSG_INFO, rc=rc)
+    ierr = atm_core_run_start(domain, block_ptr, dt, config_do_restart, &
+         config_restart_timestamp_name, diag_start_time, diag_stop_time, &
+         state, diag, diag_physics, mesh, input_start_time, &
+         input_stop_time, output_start_time, output_stop_time, &
+         config_apply_lbcs, currTime, timestamp, itimestep)
+    print *, "atm_core_run_start ierr =", ierr
+
     call ESMF_LogWrite("exiting SetClock", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine SetClock
 
@@ -456,13 +484,25 @@ contains
     ! integer                     :: currentSsiPe
     ! character(len=160)          :: msgString
     character(:), allocatable :: file
+    integer :: ierr
 
     file = __FILE__
     rc = ESMF_SUCCESS
     call ESMF_LogWrite("call mpas_run", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
-    ! this mpas_run calls atm_core_run
-    call mpas_run(domain)
+    ! this mpas_run calls atm_core_run and runs the whole model
+    ! call mpas_run(domain)
+    ! atm_core_run_advance takes a single timestep
+    print *, "itimestep =", itimestep
+    ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
+         config_apply_lbcs, input_start_time, &
+         input_stop_time, output_start_time, output_stop_time, &
+         input_stream, read_time, stream_dir, &
+         integ_start_time, integ_stop_time, &
+         diag_start_time, diag_stop_time, &
+         dt, itimestep, state, mesh, diag, diag_physics, &
+         tend, tend_physics, config_restart_timestamp_name)
+    print *, "atm_core_run_advance ierr =", ierr
     call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
 
 
