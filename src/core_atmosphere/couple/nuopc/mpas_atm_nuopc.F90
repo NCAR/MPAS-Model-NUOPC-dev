@@ -4,6 +4,7 @@ module mpas_atm_nuopc
   use mpas_derived_types, only: core_type, domain_type, block_type, &
        mpas_pool_type, mpas_time_type
   use mpas_kind_types, only: rkind, r8kind, strkind
+  use mpas_nuopc_utils, only: check
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use atm_core, only: atm_core_run_start, atm_core_run_advance
   use esmf
@@ -12,6 +13,10 @@ module mpas_atm_nuopc
   implicit none
 
   private
+
+  ! NUOPC variables
+  type(ESMF_State) :: importState, exportState
+
   ! mpas_init arguments
   type (core_type), pointer :: corelist => null()
   type (domain_type), pointer :: domain => null()
@@ -122,12 +127,14 @@ contains
   ! advertise the fields
   subroutine Advertise(model, rc)
     use mpi
+    use mpas_nuopc_fields, only : advertise_fields, get_field_list, cap_field_t
     use mpas_derived_types, only : core_type, domain_type
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
     character(:), allocatable :: file
     ! ! local variables
     !     type(ESMF_State)        :: importState, exportState
+    type(cap_field_t), allocatable, target :: field_list(:)
 
     ! debugging
     integer :: ierr
@@ -156,6 +163,9 @@ contains
     call mpas_init(corelist, domain, external_comm=MPI_COMM_WORLD)
     call ESMF_LogWrite("finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
 
+
+    field_list = get_field_list()
+    call advertise_fields(field_list, importState, exportState, rc=rc)
     ! Get variables from MPAS
     ! real, pointer :: qrainxy(:)
     ! call mpas_pool_get_array( domain%diag, 'qrainxy', qrainxy )
@@ -167,7 +177,7 @@ contains
 
 
 
-    ! query for importState and exportState
+
     ! call NUOPC_ModelGet(model, importState=importState, &
     !      exportState=exportState, rc=rc)
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -175,7 +185,6 @@ contains
     ! Disabling the following macro, e.g. renaming to WITHIMPORTFIELDS_disable,
     ! will result in a model component that does not advertise any importable
     ! Fields. Use this if you want to drive the model independently.
-
 
 ! #define WITHIMPORTFIELDS
 ! #ifdef WITHIMPORTFIELDS
@@ -192,25 +201,6 @@ contains
     ! ! importable field: precipitation_flux
     ! call NUOPC_Advertise(importState, &
     !      StandardName="precipitation_flux", name="precip", rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-! #endif
-
-! #define WITHEXPORTFIELDS
-! #ifdef WITHEXPORTFIELDS
-    ! ! exportable field: sea_surface_temperature
-    ! call NUOPC_Advertise(exportState, &
-    !      StandardName="sea_surface_temperature", name="sst", rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
-    ! ! exportable field: sea_surface_salinity
-    ! call NUOPC_Advertise(exportState, &
-    !      StandardName="sea_surface_salinity", name="sss", rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
-    ! ! exportable field: sea_surface_height_above_sea_level
-    ! call NUOPC_Advertise(exportState, &
-    !      StandardName="sea_surface_height_above_sea_level", &
-    !      name="ssh", rc=rc)
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 ! #endif
 
@@ -242,6 +232,7 @@ contains
     file = __FILE__
     rc = ESMF_SUCCESS
 
+    print *, "entering realize"
     ! query for importState and exportState
     ! call NUOPC_ModelGet(model, importState=importState, &
     !      exportState=exportState, rc=rc)
@@ -390,7 +381,9 @@ contains
     !    endif
     ! enddo
 ! #endif
-
+    print *, "exiting realize"
+    stop "FOO"
+    call ESMF_LogWrite("exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Realize
 
   !-----------------------------------------------------------------------------
@@ -430,6 +423,20 @@ contains
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
     call ESMF_ClockSet(clock, timeStep=timestep, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+    ! ! initialize start time
+    ! call mpas_pool_get_config(domain%blocklist%configs, 'config_start_time', startTime_s)
+    ! print *, "starttime = ", trim(startTime_s)
+    ! call ESMF_TimeSet(startTime, timeString=startTime_s, rc=rc)
+    ! call ESMF_ClockSet(clock, startTime=startTime, rc=rc)
+
+    ! ! initialize end time
+    ! call mpas_pool_get_config(domain%blocklist%configs, 'config_run_duration', duration_s)
+    ! call ESMF_TimeIntervalSet(duration, timeIntervalString=duration_s, rc=rc) ! MPAS dt in seconds
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! stopTime = startTime + duration
+    ! call ESMF_ClockSet(clock, stopTime=stopTime, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     call NUOPC_CompSetClock(model, clock, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -593,16 +600,4 @@ contains
     ! endif
     rc = ESMF_SUCCESS
   end subroutine SetVM
-
-
-  function check(rc, msg, line, file) result(res)
-    integer, intent(in) :: rc
-    character(len=*), intent(in) :: msg
-    integer, intent(in) :: line
-    character(len=*), intent(in) :: file
-    logical :: res
-    res = ESMF_LogFoundError(rcToCheck=rc, msg=msg, line=line, file=file)
-  end function check
-
-
 end module mpas_atm_nuopc
