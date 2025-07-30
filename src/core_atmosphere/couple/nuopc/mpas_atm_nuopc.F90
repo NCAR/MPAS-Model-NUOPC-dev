@@ -4,7 +4,7 @@ module mpas_atm_nuopc
   use mpas_derived_types, only: core_type, domain_type, block_type, &
        mpas_pool_type, mpas_time_type
   use mpas_kind_types, only: rkind, r8kind, strkind
-  use mpas_nuopc_utils, only: check
+  use mpas_nuopc_utils, only: check, gridCreate
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use atm_core, only: atm_core_run_start, atm_core_run_advance
   use esmf
@@ -16,6 +16,7 @@ module mpas_atm_nuopc
 
   ! NUOPC variables
   type(ESMF_State) :: importState, exportState
+  type(ESMF_Grid)  :: mpas_grid
 
   ! mpas_init arguments
   type (core_type), pointer :: corelist => null()
@@ -145,10 +146,6 @@ contains
     rc = ESMF_SUCCESS
     call ESMF_LogWrite("entering Advertise", ESMF_LOGMSG_INFO, rc=rc)
 
-    ! --- this is from the hello world
-    ! call my_model_init()
-    ! ---
-
     call MPI_Initialized(flag, ierr)
 
     if (flag .eqv. .true.) then
@@ -164,6 +161,9 @@ contains
     call ESMF_LogWrite("finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
 
 
+    ! mpas_grid = gridCreate(is%wrap%did,rc=rc)
+    mpas_grid = gridCreate(rc=rc)
+
     field_list = get_field_list()
     call advertise_fields(field_list, importState, exportState, rc=rc)
     ! Get variables from MPAS
@@ -176,7 +176,7 @@ contains
     !      rc           = rc)
 
 
-
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! call NUOPC_ModelGet(model, importState=importState, &
     !      exportState=exportState, rc=rc)
@@ -210,6 +210,7 @@ contains
   !-----------------------------------------------------------------------------
 
   subroutine Realize(model, rc)
+    use mpas_nuopc_fields, only : realize_fields, get_field_list, cap_field_t
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
 
@@ -228,11 +229,18 @@ contains
 !     integer                         :: clb(1), cub(1), i
 !     type(ESMF_VM)                   :: vm
     character(:), allocatable :: file
+    type(cap_field_t), allocatable, target :: field_list(:)
+
 
     file = __FILE__
     rc = ESMF_SUCCESS
 
     print *, "entering realize"
+
+    field_list = get_field_list()
+    call realize_fields(domain, field_list, importState, exportState, rc=rc)
+
+
     ! query for importState and exportState
     ! call NUOPC_ModelGet(model, importState=importState, &
     !      exportState=exportState, rc=rc)
@@ -333,7 +341,7 @@ contains
 ! #endif
 
 ! #ifdef WITHEXPORTFIELDS
-    ! ! exportable field on Grid: sea_surface_temperature
+    ! exportable field on Grid: sea_surface_temperature
     ! field = ESMF_FieldCreate(name="sst", grid=gridOut, &
     !      typekind=ESMF_TYPEKIND_R8, rc=rc)
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -344,6 +352,7 @@ contains
 
     ! call NUOPC_Realize(exportState, field=field, rc=rc)
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
 
     ! ! exportable field on Mesh: sea_surface_salinity
     ! field = ESMF_FieldCreate(name="sss", mesh=meshOut, &
@@ -382,7 +391,7 @@ contains
     ! enddo
 ! #endif
     print *, "exiting realize"
-    stop "FOO"
+    stop "FOO: realize"
     call ESMF_LogWrite("exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Realize
 

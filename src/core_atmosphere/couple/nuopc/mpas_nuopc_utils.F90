@@ -1,7 +1,23 @@
 module mpas_nuopc_utils
-  use esmf, only: ESMF_LogFoundError
+  use esmf
   implicit none
 contains
+  function gridCreate(rc) result(grid)
+    integer, intent(out) :: rc
+    type(ESMF_Grid) :: grid
+    character(:), allocatable :: file
+    rc = ESMF_SUCCESS
+    file = __FILE__
+
+    print *, "TODO: move reading in MPAS mesh to here"
+    ! grid = ESMF_GridCreate(name='MPAS_Grid'
+    !      distgrid=WRFHYDRO_DistGrid, coordSys = ESMF_COORDSYS_SPH_DEG, &
+    !      coordTypeKind=ESMF_TYPEKIND_COORD, &
+    !      rc = rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+  end function gridCreate
+
+
   function check(rc, msg, line, file) result(res)
     integer, intent(in) :: rc
     character(len=*), intent(in) :: msg
