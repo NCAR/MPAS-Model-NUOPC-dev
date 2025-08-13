@@ -28,6 +28,8 @@ module mpas_nuopc_fields
   logical, parameter :: IMPORT_F = .false.
   logical, parameter :: EXPORT_T = .true.
   logical, parameter :: EXPORT_F = .false.
+  logical, parameter :: TMP_EXPORT_T = .false.
+  logical, parameter :: TMP_IMPORT_T = .false.
 
 
 
@@ -42,49 +44,75 @@ contains
     res = field_list
   end function get_field_list
 
+  subroutine add_field_dictionary(fieldList, rc)
+    type(cap_field_t), intent(in) :: fieldList(:)
+    integer :: rc
+    ! local variables
+    integer :: n
+    logical :: isPresent
+    character(:), allocatable :: file
+    file = __FILE__
+
+    rc = ESMF_SUCCESS
+    do n = lbound(fieldList,1), ubound(fieldList,1)
+       isPresent = NUOPC_FieldDictionaryHasEntry( &
+            fieldList(n)%sd_name, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+       if (.not.isPresent) then
+          call NUOPC_FieldDictionaryAddEntry( &
+               StandardName=trim(fieldList(n)%sd_name), &
+               canonicalUnits=trim(fieldList(n)%units), &
+               rc=rc)
+          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       end if
+    end do
+
+  end subroutine add_field_dictionary
+
 
   subroutine field_init()
     field_list = [ &
       add_field("inst_total_soil_moisture_content","smc", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("inst_soil_moisture_content","slc", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_temperature","stc", "K", &
-        IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_1","sh2ox1", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_2","sh2ox2", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_3","sh2ox3", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_4","sh2ox4", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_1","smc1", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_2","smc2", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_3","smc3", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_4","smc4", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("soil_temperature_layer_1","stc1", "K", &
-        IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("soil_temperature_layer_2","stc2", "K", &
-        IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("soil_temperature_layer_3","stc3", "K", &
-        IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("soil_temperature_layer_4","stc4", "K", &
-        IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("soil_porosity","smcmax1", "1", &
         IMPORT_F, EXPORT_F, 0.45d0), &
       add_field("vegetation_type","vegtyp", "1", &
         IMPORT_F, EXPORT_F, 16.0d0), &
       add_field("surface_water_depth","sfchead", "mm", &
-        IMPORT_F, EXPORT_T, 0.00d0), &
+        IMPORT_F, TMP_EXPORT_T, 0.00d0), &
       add_field("time_step_infiltration_excess","infxsrt", "mm", &
-        IMPORT_T, EXPORT_F, 0.00d0), &
+        TMP_IMPORT_T, EXPORT_F, 0.00d0), &
       add_field("soil_column_drainage","soldrain", "mm", &
-        IMPORT_T, EXPORT_F, 0.00d0) &
+        TMP_IMPORT_T, EXPORT_F, 0.00d0) &
       ]
   end subroutine field_init
 
@@ -104,7 +132,7 @@ contains
 
 
 
-!   subroutine advertise_fields(domain)
+!   subroutine advertise_fields_foo(domain)
 !     use mpas_atmphys_vars, only: mpas_noahmp
 !     use mpas_derived_types, only: domain_type, block_type
 !     type(domain_type), pointer, intent(inout) :: domain
@@ -163,9 +191,7 @@ contains
 !     !      name="ssh", rc=rc)
 !     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-!     print *, "end of advertise_fields"
-!     stop "FOO"
-!   end subroutine advertise_fields
+!   end subroutine advertise_fields_foo
 
 
   ! subroutine realize_fields(fieldList, importState, exportState, grid, &
@@ -202,10 +228,11 @@ contains
     character(:), allocatable :: file, mesh_file !, grid_file
     real(ESMF_KIND_R8), pointer :: fptr(:)
     integer :: numElements, numNodes
+    integer, parameter :: did = 0
     file = __FILE__
-
     rc = ESMF_SUCCESS
 
+    if (did /= 0) error stop "Not prepared for parallel yet"
 
     ! create grid for smois_p | soil moisture
     call mpas_pool_get_subpool(domain%blocklist%structs, 'mesh', mesh)
@@ -233,10 +260,6 @@ contains
          meshloc=ESMF_MESHLOC_ELEMENT, name='temperature', rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-    ! windField = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, name='wind', rc=rc)
-    ! ! Create FieldBundle and add Fields
-    ! call ESMF_FieldBundleCreate(stateBundle, mesh, rc=rc)
-    ! call ESMF_FieldBundleAdd(stateBundle, (/tempField, windField/), rc=rc)
     print *, "Fields created"
 
     ! Access pointer to underlying data array
@@ -245,7 +268,12 @@ contains
     ! Initialize field values
     fptr = 300.0d0   ! e.g., initialize temperature field to 300K
 
+    ! Create field bundle
 
+    ! windField = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, name='wind', rc=rc)
+    ! ! Create FieldBundle and add Fields
+    ! call ESMF_FieldBundleCreate(stateBundle, mesh, rc=rc)
+    ! call ESMF_FieldBundleAdd(stateBundle, (/tempField, windField/), rc=rc)
 
 
     do n=lbound(fieldList,1), ubound(fieldList,1)
@@ -277,52 +305,68 @@ contains
       !   fieldList(n)%rl_import = .false.
       ! end if
 
+      ! --- exports ---
       ! check realize export
-      ! if (fieldList(n)%ad_export) then
-      !    connected = NUOPC_IsConnected(exportState, &
-      !         fieldName = trim(fieldList(n)%st_name),rc=rc)
-      !    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-      !   end if
-      ! ! else
-      ! !   realizeExport = .false.
-      ! ! end if
-      ! ! create export field
-      ! if (connected) then
-      !   field_export = field_create(fld_name=fieldList(n)%st_name, &
-      !     grid=grid, did=did, memflg=memr_export, rc=rc)
-      !   if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      !   call NUOPC_Realize(exportState, field=field_export, rc=rc)
-      !   if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      !   fieldList(n)%rl_export = .true.
-      ! else
-      !   call ESMF_StateRemove(exportState, (/fieldList(n)%st_name/), &
-      !     relaxedflag=.true., rc=rc)
-      !   if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      !   fieldList(n)%rl_export = .false.
-      ! end if
+      if (fieldList(n)%ad_export) then
+         connected = NUOPC_IsConnected(exportState, &
+              fieldName = trim(fieldList(n)%st_name),rc=rc)
+         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      else
+        realizeExport = .false.
+     end if
+
+      ! create export field
+      if (connected) then
+        field_export = field_create(domain, fieldList(n)%st_name, &
+             mesh_in, did, rc=rc)
+             ! mesh, did, memr_export, rc=rc)
+        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+        call NUOPC_Realize(exportState, field=field_export, rc=rc)
+        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+        fieldList(n)%rl_export = .true.
+      else
+        call ESMF_StateRemove(exportState, (/fieldList(n)%st_name/), &
+          relaxedflag=.true., rc=rc)
+        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+        fieldList(n)%rl_export = .false.
+      end if
     end do
 
     print *, "FOO GOOD: WORKING ON REALIZING FIELDS, ADDING MPAS MESH FIELDS"
+    error stop "TODO: REALIZE FIELDS"
   end subroutine realize_fields
 
 
-  subroutine advertise_fields(fieldList, importState, exportState, &
+  subroutine advertise_fields(model,fieldList, importState, exportState, &
        transferOffer, rc)
-    type(cap_field_t), intent(in)    :: fieldList(:)
-    type(ESMF_State), intent(inout)   :: importState
-    type(ESMF_State), intent(inout)   :: exportState
+    use NUOPC_Model, only : NUOPC_ModelGet
+    type(ESMF_GridComp), intent(inout) :: model
+    type(cap_field_t), intent(in) :: fieldList(:)
+    type(ESMF_State), intent(inout) :: importState
+    type(ESMF_State), intent(inout) :: exportState
     character(*), intent(in),optional :: transferOffer
-    integer, intent(out)              :: rc
+    integer, intent(out) :: rc
     ! local variables
     character(:), allocatable :: file
     integer :: i, start, end
+    ! type(ESMF_GridComp) :: model
+    type(ESMF_Clock) :: clock
+    type(ESMF_State) :: importState_l
+    type(ESMF_State) :: exportState_l
+
     file = __FILE__
     rc = ESMF_SUCCESS
 
+    call NUOPC_ModelGet(model, importState=importState, &
+      exportState=exportState, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
     start = lbound(fieldList,1)
     end = ubound(fieldList,1)
-    print *, "advertising no fields right now, setting end index to 0"
-    end = 0
+
     do i = start, end
       if (fieldList(i)%ad_import) then
         call NUOPC_Advertise(importState, &
@@ -344,8 +388,8 @@ contains
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
       end if
     end do
-
-  end subroutine
+    print *, "Advertised Fields"
+  end subroutine advertise_fields
 
   subroutine check_var(var, name)
     use machine
@@ -359,17 +403,19 @@ contains
     end if
   end subroutine check_var
 
-  function field_create(rt_domain, fld_name, grid, did, memflg, rc)
+  function field_create(rt_domain, fld_name, mesh, did, rc) &
+       result(field)
     use mpas_derived_types, only: domain_type
-    ! return value
-    type(ESMF_Field) :: field_create
     ! arguments
-    type (domain_type), intent(in) :: rt_domain(:)
+    type (domain_type), intent(in) :: rt_domain
+    ! type (domain_type), intent(in) :: rt_domain(:)
     character(*), intent(in) :: fld_name
-    type(ESMF_Grid), intent(in) :: grid
+    type(ESMF_Mesh), intent(in) :: mesh
     integer, intent(in) :: did
-    type(memory_flag), intent(in) :: memflg
+    ! type(memory_flag), intent(in) :: memflg
     integer,          intent(out) :: rc
+    ! return value
+    type(ESMF_Field) :: field
     ! local variables
     character(len=16)       :: cmemflg
     character(:), allocatable :: file
@@ -380,105 +426,105 @@ contains
     ! if (memflg .eq. MEMORY_POINTER) then
     !   select case (trim(fld_name))
         ! case ('smc')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%smc(:,:,:), gridToFieldMap=(/1,2/), &
         !     ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('slc')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%sh2ox(:,:,:), gridToFieldMap=(/1,2/), &
         !     ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('stc')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%stc(:,:,:), gridToFieldMap=(/1,2/), &
         !     ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('sh2ox1')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%sh2ox(:,:,1), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('sh2ox2')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%sh2ox(:,:,2), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('sh2ox3')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%sh2ox(:,:,3), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('sh2ox4')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%sh2ox(:,:,4), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smc1')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%smc(:,:,1), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smc2')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%smc(:,:,2), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smc3')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%smc(:,:,3), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smc4')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%smc(:,:,4), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smcmax1')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%smcmax1, &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('stc1')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%stc(:,:,1), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('stc2')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%stc(:,:,2), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('stc3')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%stc(:,:,3), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('stc4')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%stc(:,:,4), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('vegtyp')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%vegtyp, &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('sfchead')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%overland%control%surface_water_head_lsm, &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('infxsrt')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%infxsrt, &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('soldrain')
-        !   field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%soldrain, &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -491,18 +537,18 @@ contains
     ! elseif (memflg .eq. MEMORY_COPY) then
       ! select case (trim(fld_name))
       !   case ('smc','slc','stc')
-      !     field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+      !     field = ESMF_FieldCreate(name=fld_name, grid=grid, &
       !       typekind=ESMF_TYPEKIND_FIELD, gridToFieldMap=(/1,2/), &
       !       ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
       !       indexflag=ESMF_INDEX_DELOCAL, rc=rc)
       !     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
       !   case default
-      !     field_create = ESMF_FieldCreate(name=fld_name, grid=grid, &
+      !     field = ESMF_FieldCreate(name=fld_name, grid=grid, &
       !       typekind=ESMF_TYPEKIND_FIELD, &
       !       indexflag=ESMF_INDEX_DELOCAL, rc=rc)
       !     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
       ! end select
-      ! call ESMF_FieldFill(field_create, dataFillScheme="const", &
+      ! call ESMF_FieldFill(field, dataFillScheme="const", &
       !   const1=ESMF_MISSING_VALUE, rc=rc)
       ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
     ! else

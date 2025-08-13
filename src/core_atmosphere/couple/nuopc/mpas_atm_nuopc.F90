@@ -4,7 +4,7 @@ module mpas_atm_nuopc
   use mpas_derived_types, only: core_type, domain_type, block_type, &
        mpas_pool_type, mpas_time_type
   use mpas_kind_types, only: rkind, r8kind, strkind
-  use mpas_nuopc_utils, only: check, gridCreate
+  use mpas_nuopc_utils, only: check, gridCreate, hydroWeightGeneration
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
   use atm_core, only: atm_core_run_start, atm_core_run_advance
   use esmf
@@ -114,7 +114,8 @@ contains
 
        if (.not.isFlag) then
           call ESMF_LogSetError(ESMF_RC_ARG_WRONG, &
-               msg="An invalid key was found in config under "//trim(compLabel)// &
+               msg="An invalid key was found in config under " &
+               //trim(compLabel)// &
                " (maybe a typo?): "//badKey, &
                line=__LINE__, &
                file=__FILE__) !, rcToReturn=rc)
@@ -128,7 +129,8 @@ contains
   ! advertise the fields
   subroutine Advertise(model, rc)
     use mpi
-    use mpas_nuopc_fields, only : advertise_fields, get_field_list, cap_field_t
+    use mpas_nuopc_fields, only : advertise_fields, get_field_list, &
+         cap_field_t, add_field_dictionary
     use mpas_derived_types, only : core_type, domain_type
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -160,12 +162,16 @@ contains
     call mpas_init(corelist, domain, external_comm=MPI_COMM_WORLD)
     call ESMF_LogWrite("finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
 
+    call hydroWeightGeneration()
+
 
     ! mpas_grid = gridCreate(is%wrap%did,rc=rc)
     mpas_grid = gridCreate(rc=rc)
 
     field_list = get_field_list()
-    call advertise_fields(field_list, importState, exportState, rc=rc)
+    call add_field_dictionary(field_list, rc)
+    call advertise_fields(model, field_list, importState, exportState, rc=rc)
+    ! call advertise_fields(field_list, importState, exportState, rc=rc)
     ! Get variables from MPAS
     ! real, pointer :: qrainxy(:)
     ! call mpas_pool_get_array( domain%diag, 'qrainxy', qrainxy )
@@ -391,7 +397,7 @@ contains
     ! enddo
 ! #endif
     print *, "exiting realize"
-    stop "FOO: realize"
+    ! stop "FOO: realize"
     call ESMF_LogWrite("exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Realize
 
