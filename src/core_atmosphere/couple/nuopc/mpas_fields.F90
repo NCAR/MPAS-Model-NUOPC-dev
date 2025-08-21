@@ -1,7 +1,8 @@
 module mpas_nuopc_fields
-  use mpas_nuopc_utils, only: check
+  use mpas_nuopc_utils, only: check, create_esmf_mesh
   use esmf
   use nuopc
+  use nuopc_model, only: nuopc_modelget
   use mpas_io, only: MPAS_REAL_FILLVAL
   implicit none
 
@@ -66,15 +67,17 @@ contains
                rc=rc)
           if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
        end if
+       ! print *, "field st name: ", trim(fieldList(n)%st_name)
     end do
 
+  print *, "FIELD DICTIONARY ADDED"
   end subroutine add_field_dictionary
 
 
   subroutine field_init()
     field_list = [ &
       add_field("inst_total_soil_moisture_content","smc", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_moisture_content","slc", "m3 m-3", &
         TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_temperature","stc", "K", &
@@ -96,13 +99,13 @@ contains
       add_field("soil_moisture_fraction_layer_4","smc4", "m3 m-3", &
         TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("soil_temperature_layer_1","stc1", "K", &
-        TMP_IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_2","stc2", "K", &
-        TMP_IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_3","stc3", "K", &
-        TMP_IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_4","stc4", "K", &
-        TMP_IMPORT_T, EXPORT_F, 288.d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 288.d0), &
       add_field("soil_porosity","smcmax1", "1", &
         IMPORT_F, EXPORT_F, 0.45d0), &
       add_field("vegetation_type","vegtyp", "1", &
@@ -194,13 +197,18 @@ contains
 !   end subroutine advertise_fields_foo
 
 
+
+  ! Allocate the data storage for the advertised variables in component’s
+  ! ESMF_State (either import or export) so you can read/write values
+  subroutine realize_fields(model, domain, fieldList, importState, &
+       exportState, realizeAllImport, realizeAllExport, rc)
   ! subroutine realize_fields(fieldList, importState, exportState, grid, &
   ! did, realizeAllImport, realizeAllExport, memr_import, memr_export, rc)
-  subroutine realize_fields(domain, fieldList, importState, exportState, rc)
-    use mpas_derived_types, only: domain_type, mpas_pool_type
+    use mpas_derived_types, only: domain_type
     use mpas_atmphys_vars, only: mpas_noahmp, smois_p
-    use mpas_pool_routines, only: mpas_pool_get_subpool, mpas_pool_get_dimension
+
     ! use mpas_atm_dimensions, only: nVertLevels, maxEdges, maxEdges2, num_scalars
+    type(ESMF_GridComp), intent(inout) :: model
     type(domain_type), intent(in)    :: domain
     type(cap_field_t), intent(inout) :: fieldList(:)
     type(ESMF_State), intent(inout)   :: importState
@@ -208,8 +216,8 @@ contains
     integer, intent(out)              :: rc
     ! type(ESMF_Grid), intent(in)       :: grid
     ! integer, intent(in)               :: did
-    ! logical, intent(in)               :: realizeAllImport
-    ! logical, intent(in)               :: realizeAllExport
+    logical, intent(in)               :: realizeAllImport
+    logical, intent(in)               :: realizeAllExport
     ! type(memory_flag)                 :: memr_import
     ! type(memory_flag)                 :: memr_export
 
@@ -221,42 +229,37 @@ contains
     type(ESMF_Field) :: field_export
     logical :: connected
     ! type(ESMF_Grid) :: grid
-    type(ESMF_Mesh) :: mesh_in
-    type (mpas_pool_type), pointer :: mesh
+    type(ESMF_Mesh) :: mesh_esmf
 
-    integer, pointer :: nCellsSolve, nSoilLevels
-    character(:), allocatable :: file, mesh_file !, grid_file
+    character(:), allocatable :: file
     real(ESMF_KIND_R8), pointer :: fptr(:)
     integer :: numElements, numNodes
     integer, parameter :: did = 0
+    ! integer, pointer :: nSoilLevels
+    integer :: nSoilLevels
     file = __FILE__
     rc = ESMF_SUCCESS
 
+    print *, "--- ENTERING REALIZE FIELDS ---"
     if (did /= 0) error stop "Not prepared for parallel yet"
 
-    ! create grid for smois_p | soil moisture
-    call mpas_pool_get_subpool(domain%blocklist%structs, 'mesh', mesh)
-    call mpas_pool_get_dimension(mesh,'nCellsSolve',nCellsSolve)
-    call mpas_pool_get_dimension(mesh,'nSoilLevels',nSoilLevels)
-    print *, "nCellsSolve =", nCellsSolve ! correct
-    print *, "nSoilLevels =", nSoilLevels ! correct
-    ! print *, "mesh size =", mesh%size
-    ! print *, "nVertLevels, maxEdges, maxEdges2, num_scalars", nVertLevels,
-    ! maxEdges, maxEdges2, num_scalars
+    ! create ESMF mesh from MPAS mesh
+    mesh_esmf = create_esmf_mesh(domain)
 
-    ! Read in mesh rather than create it, just easier
-    mesh_file = "x1.40962.esmf.nc"
-    mesh_in = ESMF_MeshCreate(filename=mesh_file, fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! ! Read in mesh rather than create it, just easier
+    ! mesh_file = "x1.40962.esmf.nc"
+    ! mesh_esmf = ESMF_MeshCreate(filename=mesh_file,
+    ! fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! print *, "Read in mesh file: ", mesh_file
+    ! call ESMF_LogWrite("Read in " // mesh_file, ESMF_LOGMSG_INFO, rc=rc)
 
-    print *, "Read in mesh file: ", mesh_file
-    call ESMF_LogWrite("Read in " // mesh_file, ESMF_LOGMSG_INFO, rc=rc)
-    call ESMF_MeshGet(mesh_in, nodeCount=numNodes, elementCount=numElements, rc=rc)
+    call ESMF_MeshGet(mesh_esmf, nodeCount=numNodes, elementCount=numElements, rc=rc)
     print *, "Mesh element count: ", numElements
     print *, "Mesh node count: ", numNodes
 
     ! Create Fields
-    import_field = ESMF_FieldCreate(mesh_in, typekind=ESMF_TYPEKIND_R8, &
+    import_field = ESMF_FieldCreate(mesh_esmf, typekind=ESMF_TYPEKIND_R8, &
          meshloc=ESMF_MESHLOC_ELEMENT, name='temperature', rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
@@ -265,30 +268,40 @@ contains
     ! Access pointer to underlying data array
     call ESMF_FieldGet(import_field, farrayPtr=fptr, rc=rc)
 
+    nSoilLevels = 4
     ! Initialize field values
     fptr = 300.0d0   ! e.g., initialize temperature field to 300K
 
     ! Create field bundle
 
-    ! windField = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, name='wind', rc=rc)
+    ! windField = ESMF_FieldCreate(mpas_mesh, typekind=ESMF_TYPEKIND_R8, name='wind', rc=rc)
     ! ! Create FieldBundle and add Fields
-    ! call ESMF_FieldBundleCreate(stateBundle, mesh, rc=rc)
+    ! call ESMF_FieldBundleCreate(stateBundle, mpas_mesh, rc=rc)
     ! call ESMF_FieldBundleAdd(stateBundle, (/tempField, windField/), rc=rc)
 
 
+    ! query for importState and exportState
+    call NUOPC_ModelGet(model, importState=importState, &
+      exportState=exportState, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+
     do n=lbound(fieldList,1), ubound(fieldList,1)
-      ! ! check realize import
-      ! if (fieldList(n)%ad_import) then
-      !   if (realizeAllImport) then
-      !     realizeImport = .true.
-      !   else
-      !     realizeImport = NUOPC_IsConnected(importState, &
-      !       fieldName=trim(fieldList(n)%st_name),rc=rc)
-      !     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      !   end if
-      ! ! else
-      ! !   realizeImport = .false.
-      ! end if
+      ! print *, "field ", trim(fieldList(n)%st_name), &
+      !      "import ", fieldList(n)%ad_import
+
+       ! check realize import
+      if (fieldList(n)%ad_import) then
+        ! if (realizeAllImport) then
+        !   realizeImport = .true.
+        ! else
+          realizeImport = NUOPC_IsConnected(importState, &
+               fieldName=trim(fieldList(n)%st_name),rc=rc)
+          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        ! end if
+      else
+        realizeImport = .false.
+      end if
 
       ! ! create import field
       ! if ( realizeImport ) then
@@ -305,20 +318,30 @@ contains
       !   fieldList(n)%rl_import = .false.
       ! end if
 
+
       ! --- exports ---
       ! check realize export
       if (fieldList(n)%ad_export) then
-         connected = NUOPC_IsConnected(exportState, &
-              fieldName = trim(fieldList(n)%st_name),rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         print *, "field ", trim(fieldList(n)%st_name), &
+           " export ", fieldList(n)%ad_export
+
+         if (realizeAllExport) then
+            realizeExport = .true.
+         else
+            connected = NUOPC_IsConnected(exportState, &
+                 fieldName = trim(fieldList(n)%st_name),rc=rc)
+            if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         end if
       else
         realizeExport = .false.
-     end if
+      end if
+
 
       ! create export field
-      if (connected) then
+      if (realizeExport) then
+        print*, "exporting field ", fieldList(n)%st_name
         field_export = field_create(domain, fieldList(n)%st_name, &
-             mesh_in, did, rc=rc)
+             mesh_esmf, did, nSoilLevels, rc=rc)
              ! mesh, did, memr_export, rc=rc)
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
@@ -335,11 +358,12 @@ contains
       end if
     end do
 
-    print *, "FOO GOOD: WORKING ON REALIZING FIELDS, ADDING MPAS MESH FIELDS"
-    error stop "TODO: REALIZE FIELDS"
+    print *, "FOO FUTURE: add all fields, just smc right now"
+    ! stop "TODO: EXIT REALIZE FIELDS"
   end subroutine realize_fields
 
 
+  ! Advertise the variables that can be provided or are needed
   subroutine advertise_fields(model,fieldList, importState, exportState, &
        transferOffer, rc)
     use NUOPC_Model, only : NUOPC_ModelGet
@@ -368,6 +392,11 @@ contains
     end = ubound(fieldList,1)
 
     do i = start, end
+      if (fieldList(i)%ad_export .or. fieldList(i)%ad_import) then
+         print *, "Advertising variable: ", trim(fieldList(i)%sd_name)," ", &
+           trim(fieldList(i)%st_name), " Imp/Exp",  fieldList(i)%ad_import, &
+           fieldList(i)%ad_export
+      end if
       if (fieldList(i)%ad_import) then
         call NUOPC_Advertise(importState, &
           StandardName = fieldList(i)%sd_name, &
@@ -379,6 +408,7 @@ contains
       end if
 
       if (fieldList(i)%ad_export) then
+        print *, "advertising st ", trim(fieldList(i)%st_name)
         call NUOPC_Advertise(exportState, &
           StandardName = fieldList(i)%sd_name, &
           Units = fieldList(i)%units, &
@@ -388,7 +418,7 @@ contains
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
       end if
     end do
-    print *, "Advertised Fields"
+    print *, "Exiting Advertised Fields"
   end subroutine advertise_fields
 
   subroutine check_var(var, name)
@@ -403,15 +433,18 @@ contains
     end if
   end subroutine check_var
 
-  function field_create(rt_domain, fld_name, mesh, did, rc) &
+  function field_create(rt_domain, fld_name, mesh, did, &
+       nSoilLevels, rc) &
        result(field)
     use mpas_derived_types, only: domain_type
+    use mpas_atmphys_vars, only: mpas_noahmp, smois_p
     ! arguments
-    type (domain_type), intent(in) :: rt_domain
+    type(domain_type), intent(in) :: rt_domain
     ! type (domain_type), intent(in) :: rt_domain(:)
     character(*), intent(in) :: fld_name
     type(ESMF_Mesh), intent(in) :: mesh
     integer, intent(in) :: did
+    integer, intent(in) :: nsoillevels
     ! type(memory_flag), intent(in) :: memflg
     integer,          intent(out) :: rc
     ! return value
@@ -419,18 +452,53 @@ contains
     ! local variables
     character(len=16)       :: cmemflg
     character(:), allocatable :: file
+    real(ESMF_KIND_R8), allocatable, target :: test_array(:,:)
 
     file = __FILE__
     rc = ESMF_SUCCESS
 
+    ! allocate(test_array(4, 40962))
+    ! test_array(1,:) = 1
+    ! test_array(2,:) = 2
+    ! test_array(3,:) = 3
+    ! test_array(4,:) = 4
+    ! print *, "test_array shape", shape(test_array)
+
+    print *, "allocated mpas_noahmp sfcrunoff =", allocated(mpas_noahmp%sfcrunoff)
+    print *, "shape mpas_noahmp sfcrunoff =", shape(mpas_noahmp%sfcrunoff)
+
+
+
     ! if (memflg .eq. MEMORY_POINTER) then
-    !   select case (trim(fld_name))
-        ! case ('smc')
-        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
-        !     farray=rt_domain(did)%smc(:,:,:), gridToFieldMap=(/1,2/), &
-        !     ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
-        !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-        !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      select case (trim(fld_name))
+        case ('smc')
+          ! field = ESMF_FieldCreate(name=fld_name, grid=grid, &
+          !    farray=rt_domain%smois(:,:,:), gridToFieldMap=(/1,2/), &
+          !   ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
+          !   indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+
+           field = ESMF_FieldCreate( &
+                name=fld_name, &
+                mesh=mesh, &
+                meshloc=ESMF_MESHLOC_ELEMENT, &
+                indexflag=ESMF_INDEX_DELOCAL, &
+                farray=test_array, &
+                gridToFieldMap=(/2/), &
+                ungriddedLBound=(/1/), &
+                ungriddedUBound=(/4/), &
+                rc=rc)
+           ! indexflag=ESMF_INDEX_GLOBAL, &
+
+
+                ! gridToFieldMap=(/2/), &  ! Assuming nCells is dim 2
+                ! ungriddedLBound=(/1/), &
+                ! ungriddedUBound=(/nSoilLevels/), &
+                ! indexflag=ESMF_INDEX_DELOCAL, &
+
+           ! field = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, &
+           !      meshloc=ESMF_MESHLOC_ELEMENT, name=fld_name, rc=rc)
+
+          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('slc')
         !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%sh2ox(:,:,:), gridToFieldMap=(/1,2/), &
@@ -463,23 +531,27 @@ contains
         !     farray=rt_domain(did)%sh2ox(:,:,4), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-        ! case ('smc1')
-        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
-        !     farray=rt_domain(did)%smc(:,:,1), &
-        !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-        !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        case ('smc1')
+          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+            meshloc=ESMF_MESHLOC_ELEMENT, &
+            ! farray=rt_domain(did)%smc(:,:,1), &
+            farray=test_array(1,:), &
+            indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+
         ! case ('smc2')
-        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
         !     farray=rt_domain(did)%smc(:,:,2), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smc3')
-        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
         !     farray=rt_domain(did)%smc(:,:,3), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
         ! case ('smc4')
-        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
+        !   field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
         !     farray=rt_domain(did)%smc(:,:,4), &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -488,11 +560,15 @@ contains
         !     farray=rt_domain(did)%smcmax1, &
         !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
         !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-        ! case ('stc1')
-        !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
-        !     farray=rt_domain(did)%stc(:,:,1), &
-        !     indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-        !   if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        case ('stc1')
+           print *, "shape mpas_noahmp stc1/tslb =", shape(mpas_noahmp%tslb)
+           field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+                meshloc=ESMF_MESHLOC_ELEMENT, &
+                farray=mpas_noahmp%tslb(:,1), &
+                indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+           if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+           stop "FOO ADDED NOAHMP FIELD"
+
         ! case ('stc2')
         !   field = ESMF_FieldCreate(name=fld_name, grid=grid, &
         !     farray=rt_domain(did)%stc(:,:,2), &
@@ -533,7 +609,7 @@ contains
         !     msg=METHOD//": Field hookup missing: "//trim(fld_name), &
         !     file=FILENAME,rcToReturn=rc)
         !   return  ! bail out
-      ! end select
+      end select
     ! elseif (memflg .eq. MEMORY_COPY) then
       ! select case (trim(fld_name))
       !   case ('smc','slc','stc')
