@@ -66,6 +66,7 @@ find_package(PnetCDF REQUIRED COMPONENTS Fortran)
 find_package(PIO REQUIRED COMPONENTS Fortran C)
 if(MPAS_HYDRO)
     find_package(ESMF REQUIRED)
+    add_definitions(-DWRF_HYDRO) # macro for NoahMP
 endif()
 
 set(HDF5_PREFER_PARALLEL TRUE)
