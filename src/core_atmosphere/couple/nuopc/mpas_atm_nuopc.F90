@@ -16,7 +16,7 @@ module mpas_atm_nuopc
   private
 
   ! NUOPC variables
-  type(ESMF_State) :: importState, exportState
+  ! type(ESMF_State) :: importState, exportState
   type(ESMF_Grid)  :: mpas_grid
 
   ! mpas_init arguments
@@ -136,8 +136,8 @@ contains
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
     character(:), allocatable :: file
-    ! ! local variables
-    !     type(ESMF_State)        :: importState, exportState
+    ! local variables
+        type(ESMF_State)        :: importState, exportState
     type(cap_field_t), allocatable, target :: field_list(:)
 
     ! debugging
@@ -147,7 +147,7 @@ contains
 
     file = __FILE__
     rc = ESMF_SUCCESS
-    call ESMF_LogWrite("entering Advertise", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: entering Advertise", ESMF_LOGMSG_INFO, rc=rc)
 
     call MPI_Initialized(flag, ierr)
 
@@ -157,11 +157,12 @@ contains
        print *, "❌ MPI is NOT initialized."
     end if
 
-    call ESMF_LogWrite("calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
 
     call mpas_init(corelist, domain, external_comm=MPI_COMM_WORLD)
-    call ESMF_LogWrite("finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
 
     ! print *, "return from advertise early: no meshes"
     ! return
@@ -172,6 +173,11 @@ contains
 
     ! mpas_grid = gridCreate(is%wrap%did,rc=rc)
     ! mpas_grid = gridCreate(rc=rc)
+
+    call NUOPC_ModelGet(model, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
 
     field_list = get_field_list()
     call add_field_dictionary(field_list, rc)
@@ -187,36 +193,14 @@ contains
     !      rc           = rc)
 
 
+    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+
+
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-    ! call NUOPC_ModelGet(model, importState=importState, &
-    !      exportState=exportState, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
-    ! Disabling the following macro, e.g. renaming to WITHIMPORTFIELDS_disable,
-    ! will result in a model component that does not advertise any importable
-    ! Fields. Use this if you want to drive the model independently.
-
-! #define WITHIMPORTFIELDS
-! #ifdef WITHIMPORTFIELDS
-    ! ! importable field: air_pressure_at_sea_level
-    ! call NUOPC_Advertise(importState, &
-    !      StandardName="air_pressure_at_sea_level", name="pmsl", rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
-    ! ! importable field: surface_net_downward_shortwave_flux
-    ! call NUOPC_Advertise(importState, &
-    !      StandardName="surface_net_downward_shortwave_flux", name="rsns", rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
-    ! ! importable field: precipitation_flux
-    ! call NUOPC_Advertise(importState, &
-    !      StandardName="precipitation_flux", name="precip", rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-! #endif
 
     print *, "Exiting Advertise"
-    call ESMF_LogWrite("exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Advertise
 
   !-----------------------------------------------------------------------------
@@ -226,8 +210,8 @@ contains
     type(ESMF_GridComp) :: model
     integer, intent(out) :: rc
 
-!     ! local variables
-!     type(ESMF_State)        :: importState, exportState
+    ! local variables
+    type(ESMF_State)        :: importState, exportState
 !     type(ESMF_TimeInterval) :: stabilityTimeStep
 !     type(ESMF_Field)        :: field
 !     type(ESMF_Grid)         :: gridIn, gridOut
@@ -247,20 +231,17 @@ contains
     file = __FILE__
     rc = ESMF_SUCCESS
 
-    print *, "entering realize"
+    call ESMF_LogWrite("MPAS: entering Realize", ESMF_LOGMSG_INFO, rc=rc)
+
+
+    call NUOPC_ModelGet(model, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! print *, "realize nothing"
     field_list = get_field_list()
     call realize_fields(model, domain, field_list, importState, exportState, &
          realizeAllImport=.false., realizeAllExport=.true., rc=rc)
-
-
-
-
-    ! query for importState and exportState
-    ! call NUOPC_ModelGet(model, importState=importState, &
-    !      exportState=exportState, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! ! create Grid objects for Fields
     ! gridIn = ESMF_GridCreateNoPeriDimUfrm(maxIndex=(/100, 20/), &
@@ -406,9 +387,8 @@ contains
     !    endif
     ! enddo
 ! #endif
-    print *, "exiting realize"
-    ! stop "FOO: realize"
-    call ESMF_LogWrite("exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_LogWrite("MPAS: exiting Realize", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Realize
 
   !-----------------------------------------------------------------------------
@@ -436,7 +416,7 @@ contains
     file = __FILE__
     rc = ESMF_SUCCESS
 
-    call ESMF_LogWrite("entering SetClock", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: entering SetClock", ESMF_LOGMSG_INFO, rc=rc)
     ! query for clock
     call NUOPC_ModelGet(model, modelClock=clock, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -497,7 +477,7 @@ contains
          config_apply_lbcs, currTime, timestamp, itimestep)
     print *, "atm_core_run_start ierr =", ierr
 
-    call ESMF_LogWrite("exiting SetClock", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: exiting SetClock", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine SetClock
 
   !-----------------------------------------------------------------------------
@@ -507,9 +487,9 @@ contains
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
 
-    ! ! local variables
-    ! type(ESMF_Clock)            :: clock
-    ! type(ESMF_State)            :: importState, exportState
+    ! local variables
+    type(ESMF_Clock)            :: clock
+    type(ESMF_State)            :: importState, exportState
     ! type(ESMF_Time)             :: currTime
     ! type(ESMF_TimeInterval)     :: timeStep
     ! type(ESMF_VM)               :: vm
@@ -520,7 +500,7 @@ contains
 
     file = __FILE__
     rc = ESMF_SUCCESS
-    call ESMF_LogWrite("call mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
     ! this mpas_run calls atm_core_run and runs the whole model
     ! call mpas_run(domain)
@@ -535,13 +515,13 @@ contains
          dt, itimestep, state, mesh, diag, diag_physics, &
          tend, tend_physics, config_restart_timestamp_name)
     print *, "atm_core_run_advance ierr =", ierr
-    call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+    ! call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
 
 
-    ! ! query for clock, importState and exportState
-    ! call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
-    !      exportState=exportState, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! query for clock, importState and exportState
+    call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
     ! ! Query for VM
     ! call ESMF_GridCompGet(model, vm=vm, rc=rc)
@@ -591,7 +571,7 @@ contains
 
     ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-    call ESMF_LogWrite("exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogWrite("MPAS: exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Advance
 
 
