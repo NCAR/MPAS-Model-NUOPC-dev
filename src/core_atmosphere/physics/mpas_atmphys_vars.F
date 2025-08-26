@@ -10,7 +10,7 @@
  use mpas_kind_types
 
  use NoahmpIOVarType
- 
+
  implicit none
  public
  save
@@ -23,7 +23,7 @@
 ! add-ons and modifications:
 ! --------------------------
 ! * added the variables sf_surface_physics,alswvisdir_p,alswvisdif_p,alswnirdir_p,alswnirdif_p,swvisdir_p,
-!   swvisdif_p,swnirdir_p,and swnirdif_p to upgrade the RRTMG short wave radiation code to WRF version 3.4.1. 
+!   swvisdif_p,swnirdir_p,and swnirdif_p to upgrade the RRTMG short wave radiation code to WRF version 3.4.1.
 !   see definition of each individual variables below.
 !   Laura D. Fowler (laura@ucar.edu) / 2013-03-11.
 ! * removed call to the updated Kain-Fritsch convection scheme.
@@ -35,7 +35,7 @@
 !   Laura D. Fowler (laura@ucar.edu) / 2013-08-23.
 ! * renamed local variable conv_deep_scheme to convection_scheme.
 !   Laura D. Fowler (laura@ucar.edu) / 2014-09-18.
-! * added empty subroutine atmphys_vars_init that does not do anything, but needed for 
+! * added empty subroutine atmphys_vars_init that does not do anything, but needed for
 !   compiling MPAS with some compilers.
 !   Laura D. Fowler (laura@ucar.edu) / 2015-01-12.
 ! * added local variables needed for the Thompson parameterization of cloud microphysics.
@@ -162,7 +162,7 @@
  real(kind=RKIND),public:: dt_microp  !time-step for cloud microphysics parameterization.
  real(kind=RKIND),public:: dt_radtlw  !time-step for longwave radiation parameterization      [mns]
  real(kind=RKIND),public:: dt_radtsw  !time-step for shortwave radiation parameterization     [mns]
- 
+
  real(kind=RKIND),public:: xice_threshold
 
  real(kind=RKIND),dimension(:,:),allocatable:: &
@@ -182,7 +182,7 @@
 !... arrays related to u- and v-velocities interpolated to theta points:
     u_p,              &!u-velocity interpolated to theta points                               [m/s]
     v_p                !v-velocity interpolated to theta points                               [m/s]
-    
+
 !... arrays related to vertical sounding:
  real(kind=RKIND),dimension(:,:,:),allocatable:: &
     zz_p,             &!
@@ -274,7 +274,7 @@
     graupelncv_p,     &!
     sr_p
 
- integer:: & 
+ integer:: &
     has_reqc,         &!
     has_reqi,         &!
     has_reqs
@@ -734,7 +734,7 @@
     emstot_p,         &!total emissivity                                                        [-]
     cemiss_p,         &!cloud emissivity for ISCCP                                              [-]
     taucldc_p,        &!cloud water optical depth for ISCCP                                     [-]
-    taucldi_p          !cloud ice optical depth for ISCCP                                       [-]    
+    taucldi_p          !cloud ice optical depth for ISCCP                                       [-]
 
  real(kind=RKIND),dimension(:,:,:,:),allocatable:: &
     abstot_p,         &!total layer absorptivity                                                [-]
@@ -781,7 +781,7 @@
 
  integer,public:: &
     num_soils          !number of soil layers                                                                  [-]
-    
+
  integer,dimension(:,:),allocatable:: &
     isltyp_p,         &!dominant soil type category                                                            [-]
     ivgtyp_p           !dominant vegetation category                                                           [-]
@@ -882,6 +882,34 @@
 
  real(kind=RKIND),dimension(:,:),allocatable:: regime_hold
  real(kind=RKIND),dimension(:,:),allocatable:: tsk_ice
+
+
+!=================================================================================================================
+!.. variables for WRF-Hydro
+!=================================================================================================================
+#ifdef WRF_HYDRO
+real(kind=RKIND), allocatable, dimension(:,:)    :: infxsrt              ! surface infiltration
+real(kind=RKIND), allocatable, dimension(:,:)    :: sfcheadrt            ! surface water head
+real(kind=RKIND), allocatable, dimension(:,:)    :: soldrain             ! soil drainage
+real(kind=RKIND), allocatable, dimension(:,:)    :: qtiledrain           ! tile drainage
+real(kind=RKIND), allocatable, dimension(:,:)    :: ZWATBLE2D            ! water table depth
+real(kind=RKIND), allocatable, dimension(:,:)    :: greenfrac
+real(kind=RKIND), allocatable, dimension(:,:)    :: SHDMAX
+character(len = 256)                             :: GEO_STATIC_FLNM
+integer                 :: finemesh
+integer                 :: finemesh_factor
+integer                 :: forc_typ
+integer                 :: snow_assim
+integer                 :: HRLDAS_ini_typ
+! =REFACTOR=
+integer                 :: crocus_opt = 0
+integer                 :: act_lev    = 0
+integer                 :: rst_bi_out
+integer                 :: rst_bi_in
+character(len=256)      :: mmf_runoff_file = " "
+integer                 :: IOPT_IMPERV = 9
+integer                 :: IOPT_RUNOFF = 9
+#endif
 
 
  contains
