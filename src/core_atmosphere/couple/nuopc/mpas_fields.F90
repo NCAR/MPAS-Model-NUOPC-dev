@@ -22,24 +22,28 @@ module mpas_nuopc_fields
      integer :: mem
   end type memory_flag
 
-  integer, parameter :: num_field_vars = 20
-  type(cap_field_t), target, dimension(num_field_vars) :: field_list
+  ! integer, parameter :: num_field_vars = 20
+  ! type(cap_field_t), target, dimension(num_field_vars) :: field_list
+  type(cap_field_t), target, dimension(:), allocatable :: field_list
   logical :: initialized = .false.
   logical, parameter :: IMPORT_T = .true.
   logical, parameter :: IMPORT_F = .false.
   logical, parameter :: EXPORT_T = .true.
   logical, parameter :: EXPORT_F = .false.
-  logical, parameter :: TMP_EXPORT_T = .true.
+  logical, parameter :: TMP_EXPORT_T = .false.
+  logical, parameter :: TMP_EXPORT_TT = .false.
   logical, parameter :: TMP_IMPORT_T = .false.
+  logical, parameter :: TMP_IMPORT_Q = .false.
 
 
 
 contains
 
-  function get_field_list() result(res)
+  function get_field_list(mpas) result(res)
+    type(logical), intent(in), optional :: mpas
     type(cap_field_t), allocatable :: res(:)
     if (.not. initialized) then
-       call field_init()
+       call field_init(mpas)
        initialized = .true.
     end if
     res = field_list
@@ -74,12 +78,13 @@ contains
   end subroutine add_field_dictionary
 
 
-  subroutine field_init()
+  subroutine field_init(mpas)
+    type(logical), intent(in), optional :: mpas
     field_list = [ &
       add_field("inst_total_soil_moisture_content","smc", "m3 m-3", &
-        IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_moisture_content","slc", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_temperature","stc", "K", &
         TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_1","sh2ox1", "m3 m-3", &
@@ -113,10 +118,26 @@ contains
       add_field("surface_water_depth","sfchead", "mm", &
         IMPORT_F, EXPORT_T, 0.00d0), &
       add_field("time_step_infiltration_excess","infxsrt", "mm", &
-        TMP_IMPORT_T, EXPORT_F, 0.00d0), &
+        TMP_IMPORT_T, EXPORT_T, 0.00d0), &
       add_field("soil_column_drainage","soldrain", "mm", &
-        TMP_IMPORT_T, EXPORT_F, 0.00d0) &
-      ]
+        TMP_IMPORT_T, EXPORT_T, 0.00d0), &
+      add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
+        TMP_IMPORT_Q, EXPORT_T, 0.00d0), &
+      add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
+        TMP_IMPORT_Q, EXPORT_T, 0.00d0) &
+        ]
+
+    ! add NoahMP Variables that MPAS provides
+    ! if (present(mpas)) then
+    !    if (mpas .eqv. .true.) then
+    !       field_list = [field_list, &
+    !            add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
+    !              TMP_IMPORT_Q, EXPORT_T, 0.00d0), &
+    !            add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
+    !              TMP_IMPORT_Q, EXPORT_F, 0.00d0) &
+    !            ]
+    !    end if
+    ! end if
   end subroutine field_init
 
   pure function add_field(sd_name, st_name, units, ad_import, ad_export, vl_fillv) result(f)
@@ -240,7 +261,7 @@ contains
     file = __FILE__
     rc = ESMF_SUCCESS
 
-    print *, "--- ENTERING REALIZE FIELDS ---"
+    print *, "MPAS: entering realize fields"
     if (did /= 0) error stop "Not prepared for parallel yet"
 
     ! create ESMF mesh from MPAS mesh
@@ -365,8 +386,7 @@ contains
       end if
     end do
 
-    print *, "FOO FUTURE: add all fields, just smc right now"
-    ! stop "TODO: EXIT REALIZE FIELDS"
+    print *, "MPAS: exiting realize fields"
   end subroutine realize_fields
 
 
@@ -425,7 +445,7 @@ contains
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
       end if
     end do
-    print *, "Exiting Advertised Fields"
+    print *, "MPAS: Exiting Advertised Fields"
   end subroutine advertise_fields
 
   subroutine check_var(var, name)
@@ -615,6 +635,20 @@ contains
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%soldrain, &
+              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      case ('sfcrunoff')
+         print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff)
+         print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff)
+         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+              meshloc=ESMF_MESHLOC_ELEMENT, &
+              farray=mpas_noahmp%sfcrunoff(:), &
+              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      case ('udrunoff')
+         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+              meshloc=ESMF_MESHLOC_ELEMENT, &
+              farray=mpas_noahmp%udrunoff(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
       case default

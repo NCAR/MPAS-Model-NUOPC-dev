@@ -179,7 +179,7 @@ contains
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
 
-    field_list = get_field_list()
+    field_list = get_field_list(mpas=.true.)
     call add_field_dictionary(field_list, rc)
     call advertise_fields(model, field_list, importState, exportState, rc=rc)
     ! call advertise_fields(field_list, importState, exportState, rc=rc)
@@ -497,6 +497,8 @@ contains
     ! character(len=160)          :: msgString
     character(:), allocatable :: file
     integer :: ierr
+
+    ! stop "DEBUGGING CLOCKS, STOPPING IN MPAS ADVANCE"
 
     file = __FILE__
     rc = ESMF_SUCCESS
