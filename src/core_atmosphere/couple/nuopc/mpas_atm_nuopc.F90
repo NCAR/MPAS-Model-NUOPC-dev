@@ -181,7 +181,9 @@ contains
 
     field_list = get_field_list(mpas=.true.)
     call add_field_dictionary(field_list, rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
     call advertise_fields(model, field_list, importState, exportState, rc=rc)
+    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
     ! call advertise_fields(field_list, importState, exportState, rc=rc)
     ! Get variables from MPAS
     ! real, pointer :: qrainxy(:)
@@ -194,12 +196,13 @@ contains
 
 
     call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
 
 
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
 
-    print *, "Exiting Advertise"
+    print *, "MPAS: Exiting Advertise"
     call ESMF_LogWrite("MPAS: exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine Advertise
 
@@ -234,9 +237,14 @@ contains
     call ESMF_LogWrite("MPAS: entering Realize", ESMF_LOGMSG_INFO, rc=rc)
 
 
+
+
     call NUOPC_ModelGet(model, importState=importState, &
          exportState=exportState, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+
+
+    ! stop "MPAS: realize, stopping early"
 
     ! print *, "realize nothing"
     field_list = get_field_list()

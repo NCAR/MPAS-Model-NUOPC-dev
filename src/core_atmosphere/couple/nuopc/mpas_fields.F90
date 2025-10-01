@@ -32,7 +32,7 @@ module mpas_nuopc_fields
   logical, parameter :: EXPORT_F = .false.
   logical, parameter :: TMP_EXPORT_T = .false.
   logical, parameter :: TMP_EXPORT_TT = .false.
-  logical, parameter :: TMP_IMPORT_T = .false.
+  logical, parameter :: TMP_IMPORT_T = .true.
   logical, parameter :: TMP_IMPORT_Q = .false.
 
 
@@ -116,15 +116,15 @@ contains
       add_field("vegetation_type","vegtyp", "1", &
         IMPORT_F, EXPORT_F, 16.0d0), &
       add_field("surface_water_depth","sfchead", "mm", &
-        IMPORT_F, EXPORT_T, 0.00d0), &
+        IMPORT_F, EXPORT_F, 0.00d0), &
       add_field("time_step_infiltration_excess","infxsrt", "mm", &
         TMP_IMPORT_T, EXPORT_T, 0.00d0), &
       add_field("soil_column_drainage","soldrain", "mm", &
-        TMP_IMPORT_T, EXPORT_T, 0.00d0), &
-      add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
-        TMP_IMPORT_Q, EXPORT_T, 0.00d0), &
-      add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
-        TMP_IMPORT_Q, EXPORT_T, 0.00d0) &
+        TMP_IMPORT_T, EXPORT_T, 0.00d0) &
+      ! ,add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
+      !   TMP_IMPORT_Q, EXPORT_T, 0.00d0), &
+      ! add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
+      !   TMP_IMPORT_Q, EXPORT_T, 0.00d0) &
         ]
 
     ! add NoahMP Variables that MPAS provides
@@ -246,9 +246,7 @@ contains
     integer :: n
     logical :: realizeImport
     logical :: realizeExport
-    type(ESMF_Field) :: import_field
-    type(ESMF_Field) :: field_export
-    logical :: connected
+    type(ESMF_Field) :: import_field, export_field
     ! type(ESMF_Grid) :: grid
     type(ESMF_Mesh) :: mesh_esmf
 
@@ -279,16 +277,13 @@ contains
     print *, "Mesh element count: ", numElements
     print *, "Mesh node count: ", numNodes
 
-    ! Create Fields
+    ! ! Create Fields
     import_field = ESMF_FieldCreate(mesh_esmf, typekind=ESMF_TYPEKIND_R8, &
          meshloc=ESMF_MESHLOC_ELEMENT, name='temperature', rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
     print *, "Fields created"
-
     ! Access pointer to underlying data array
     call ESMF_FieldGet(import_field, farrayPtr=fptr, rc=rc)
-
     nSoilLevels = 4
     ! Initialize field values
     fptr = 300.0d0   ! e.g., initialize temperature field to 300K
@@ -306,6 +301,9 @@ contains
       exportState=exportState, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
+    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    ! stop "MPAS: in realize printing states"
 
     do n=lbound(fieldList,1), ubound(fieldList,1)
       ! print *, "field ", trim(fieldList(n)%st_name), &
@@ -313,22 +311,22 @@ contains
 
        ! check realize import
       if (fieldList(n)%ad_import) then
-        ! if (realizeAllImport) then
-        !   realizeImport = .true.
-        ! else
+        if (realizeAllImport) then
+          realizeImport = .true.
+        else
           realizeImport = NUOPC_IsConnected(importState, &
                fieldName=trim(fieldList(n)%st_name), rc=rc)
           print*, "import field ", trim(fieldList(n)%st_name), " realized", &
                realizeImport
           if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-        ! end if
+        end if
       else
         realizeImport = .false.
       end if
 
       ! create import field
       if ( realizeImport ) then
-         print*, "importing field ", fieldList(n)%st_name
+         ! print*, "MPAS: importing field ", fieldList(n)%st_name
          ! import_field = field_create(fld_name=fieldList(n)%st_name, &
          !      grid=grid, did=did, memflg=memr_import, rc=rc)
          import_field = field_create(domain, fieldList(n)%st_name, &
@@ -337,7 +335,7 @@ contains
 
          call NUOPC_Realize(importState, field=import_field, rc=rc)
          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-
+         print*, "MPAS: importing field realized ", fieldList(n)%st_name
          fieldList(n)%rl_import = .true.
       else
          call ESMF_StateRemove(importState, (/fieldList(n)%st_name/), &
@@ -347,16 +345,18 @@ contains
       end if
 
 
+      ! print *, "MPAS: export field ", trim(fieldList(n)%st_name), &
+      !      " export ", fieldList(n)%ad_export
       ! --- exports ---
       ! check realize export
       if (fieldList(n)%ad_export) then
-         print *, "field ", trim(fieldList(n)%st_name), &
-           " export ", fieldList(n)%ad_export
+         ! print *, "MPAS: export field ", trim(fieldList(n)%st_name), &
+         !   " export ", fieldList(n)%ad_export
 
          if (realizeAllExport) then
             realizeExport = .true.
          else
-            connected = NUOPC_IsConnected(exportState, &
+            realizeExport = NUOPC_IsConnected(exportState, &
                  fieldName = trim(fieldList(n)%st_name),rc=rc)
             if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
          end if
@@ -367,17 +367,20 @@ contains
 
       ! create export field
       if (realizeExport) then
-        print*, "exporting field ", fieldList(n)%st_name
-        field_export = field_create(domain, fieldList(n)%st_name, &
+        export_field = field_create(domain, fieldList(n)%st_name, &
              mesh_esmf, did, nSoilLevels, rc=rc)
              ! mesh, did, memr_export, rc=rc)
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
-        call NUOPC_Realize(exportState, field=field_export, rc=rc)
+        call NUOPC_Realize(exportState, field=export_field, rc=rc)
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
 
         fieldList(n)%rl_export = .true.
+        print*, "MPAS: realize exporting field ", fieldList(n)%st_name
+        call ESMF_LogWrite("MPAS: exporting " // fieldList(n)%st_name, ESMF_LOGMSG_INFO, rc=rc)
       else
+         print *, "MPAS: realize remove export ", trim(fieldList(n)%st_name),&
+              " ---------------------------"
         call ESMF_StateRemove(exportState, (/fieldList(n)%st_name/), &
           relaxedflag=.true., rc=rc)
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -419,11 +422,11 @@ contains
     end = ubound(fieldList,1)
 
     do i = start, end
-      if (fieldList(i)%ad_export .or. fieldList(i)%ad_import) then
-         print *, "Advertising variable: ", trim(fieldList(i)%sd_name)," ", &
-           trim(fieldList(i)%st_name), " Imp/Exp",  fieldList(i)%ad_import, &
-           fieldList(i)%ad_export
-      end if
+      ! if (fieldList(i)%ad_export .or. fieldList(i)%ad_import) then
+      !    print *, "Advertising variable: ", trim(fieldList(i)%sd_name)," ", &
+      !      trim(fieldList(i)%st_name), " Imp/Exp",  fieldList(i)%ad_import, &
+      !      fieldList(i)%ad_export
+      ! end if
       if (fieldList(i)%ad_import) then
         call NUOPC_Advertise(importState, &
           StandardName = fieldList(i)%sd_name, &
@@ -432,10 +435,10 @@ contains
           name = fieldList(i)%st_name, &
           rc = rc)
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        print *, "MPAS: advertise import ", trim(fieldList(i)%st_name)
       end if
 
       if (fieldList(i)%ad_export) then
-        print *, "advertising st_name: ", trim(fieldList(i)%st_name)
         call NUOPC_Advertise(exportState, &
           StandardName = fieldList(i)%sd_name, &
           Units = fieldList(i)%units, &
@@ -443,6 +446,11 @@ contains
           name = fieldList(i)%st_name, &
           rc = rc)
         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        ! print *, "MPAS: advertise export ", trim(fieldList(i)%st_name)
+        print *, "MPAS: advertise export ", trim(fieldList(i)%sd_name), &
+             trim(fieldList(i)%st_name), &
+             trim(fieldList(i)%units), &
+             trim(transferOffer)
       end if
     end do
     print *, "MPAS: Exiting Advertised Fields"

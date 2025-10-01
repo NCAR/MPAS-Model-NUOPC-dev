@@ -1,5 +1,6 @@
 module mpas_nuopc_utils
   use esmf
+  use nuopc
   implicit none
 contains
   subroutine hydroWeightGeneration()
@@ -9,7 +10,8 @@ contains
     file = __FILE__
     rc = ESMF_SUCCESS
 
-    mesh_file = "x1.40962.esmf.nc"
+    ! mesh_file = "x1.40962.esmf.nc"
+    mesh_file = "frontrange.scrip.nc"
     mesh = ESMF_MeshCreate(filename=mesh_file, &
          fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
@@ -100,6 +102,36 @@ contains
     character(len=*), intent(in) :: file
     logical :: res
     res = ESMF_LogFoundError(rcToCheck=rc, msg=msg, line=line, file=file)
+    ! this won't work properly in parallel
     if (res .eqv. .true.) error stop "Bad Check, msg = " // msg
   end function check
+
+
+  subroutine probe_connected_pair(expState, impState, name, rc)
+    type(ESMF_State), intent(inout) :: expState, impState
+    character(*), intent(in) :: name
+    integer, intent(out) :: rc
+    type(ESMF_Field) :: fe, fi
+    logical :: ce, ci
+    character(:), allocatable :: file
+    file = __FILE__
+    rc = ESMF_SUCCESS
+
+    ce = NUOPC_IsConnected(expState, fieldName=trim(name), rc=rc)
+    ci = NUOPC_IsConnected(impState, fieldName=trim(name), rc=rc)
+    write(*,'(A,1X,A,1X,L1,1X,L1)') 'Connected(exp,imp):', trim(name), ce, ci
+    if (ce) then
+       call ESMF_StateGet(expState, itemName=trim(name), field=fe, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       call ESMF_FieldValidate(fe, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    end if
+    if (ci) then
+       call ESMF_StateGet(impState, itemName=trim(name), field=fi, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       call ESMF_FieldValidate(fi, rc=rc)
+       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    end if
+  end subroutine probe_connected_pair
+
 end module mpas_nuopc_utils
