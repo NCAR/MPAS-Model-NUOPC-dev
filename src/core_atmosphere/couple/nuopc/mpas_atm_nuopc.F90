@@ -137,7 +137,7 @@ contains
     integer, intent(out) :: rc
     character(:), allocatable :: file
     ! local variables
-        type(ESMF_State)        :: importState, exportState
+    type(ESMF_State)        :: importState, exportState
     type(cap_field_t), allocatable, target :: field_list(:)
 
     ! debugging
@@ -515,7 +515,7 @@ contains
     ! this mpas_run calls atm_core_run and runs the whole model
     ! call mpas_run(domain)
     ! atm_core_run_advance takes a single timestep
-    print *, "itimestep =", itimestep
+    print *, "MPAS: itimestep =", itimestep
     ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
          config_apply_lbcs, input_start_time, &
          input_stop_time, output_start_time, output_stop_time, &

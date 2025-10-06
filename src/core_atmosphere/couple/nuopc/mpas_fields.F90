@@ -32,7 +32,7 @@ module mpas_nuopc_fields
   logical, parameter :: EXPORT_F = .false.
   logical, parameter :: TMP_EXPORT_T = .false.
   logical, parameter :: TMP_EXPORT_TT = .false.
-  logical, parameter :: TMP_IMPORT_T = .true.
+  logical, parameter :: TMP_IMPORT_T = .false.
   logical, parameter :: TMP_IMPORT_Q = .false.
 
 
@@ -88,29 +88,29 @@ contains
       add_field("inst_soil_temperature","stc", "K", &
         TMP_IMPORT_T, EXPORT_F, 288.d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_1","sh2ox1", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_2","sh2ox2", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_3","sh2ox3", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_4","sh2ox4", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_1","smc1", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_2","smc2", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_3","smc3", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("soil_moisture_fraction_layer_4","smc4", "m3 m-3", &
-        TMP_IMPORT_T, EXPORT_T, 0.20d0), &
+        IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("soil_temperature_layer_1","stc1", "K", &
-        TMP_IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_T, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_2","stc2", "K", &
-        TMP_IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_T, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_3","stc3", "K", &
-        TMP_IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_T, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_4","stc4", "K", &
-        TMP_IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_T, EXPORT_T, 288.d0), &
       add_field("soil_porosity","smcmax1", "1", &
         IMPORT_F, EXPORT_F, 0.45d0), &
       add_field("vegetation_type","vegtyp", "1", &
@@ -118,9 +118,9 @@ contains
       add_field("surface_water_depth","sfchead", "mm", &
         IMPORT_F, EXPORT_F, 0.00d0), &
       add_field("time_step_infiltration_excess","infxsrt", "mm", &
-        TMP_IMPORT_T, EXPORT_T, 0.00d0), &
+        IMPORT_T, EXPORT_T, 0.00d0), &
       add_field("soil_column_drainage","soldrain", "mm", &
-        TMP_IMPORT_T, EXPORT_T, 0.00d0) &
+        IMPORT_T, EXPORT_T, 0.00d0) &
       ! ,add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
       !   TMP_IMPORT_Q, EXPORT_T, 0.00d0), &
       ! add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
@@ -278,15 +278,15 @@ contains
     print *, "Mesh node count: ", numNodes
 
     ! ! Create Fields
-    import_field = ESMF_FieldCreate(mesh_esmf, typekind=ESMF_TYPEKIND_R8, &
-         meshloc=ESMF_MESHLOC_ELEMENT, name='temperature', rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-    print *, "Fields created"
-    ! Access pointer to underlying data array
-    call ESMF_FieldGet(import_field, farrayPtr=fptr, rc=rc)
-    nSoilLevels = 4
-    ! Initialize field values
-    fptr = 300.0d0   ! e.g., initialize temperature field to 300K
+    ! import_field = ESMF_FieldCreate(mesh_esmf, typekind=ESMF_TYPEKIND_R8, &
+    !      meshloc=ESMF_MESHLOC_ELEMENT, name='temperature', rc=rc)
+    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! print *, "Fields created"
+    ! ! Access pointer to underlying data array
+    ! call ESMF_FieldGet(import_field, farrayPtr=fptr, rc=rc)
+    ! nSoilLevels = 4
+    ! ! Initialize field values
+    ! fptr = 300.0d0   ! e.g., initialize temperature field to 300K
 
     ! Create field bundle
 
