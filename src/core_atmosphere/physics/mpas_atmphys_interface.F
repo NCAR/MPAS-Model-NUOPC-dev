@@ -64,7 +64,8 @@
 !   Laura D. Fowler (laura@ucar.edu) / 2016-04-11.
 ! * corrected the calculation of the surface pressure, mainly extrapolation of the air density to the surface.
 !   Laura D. Fowler (laura@ucar.edu) / 2016-04-25.
-
+! * changed microphysics update such that the microphsyics tendency is ignored above level mp_top_level
+!   Bill Skamarock / 2025/10/17 
 
  contains
 
@@ -810,6 +811,7 @@
  real(kind=RKIND),dimension(:,:),pointer  :: rthmpten,rqvmpten,rqcmpten,rqrmpten,rqimpten,rqsmpten,rqgmpten
  real(kind=RKIND),dimension(:,:),pointer  :: rncmpten,rnimpten,rnrmpten,rnifampten,rnwfampten
  real(kind=RKIND),dimension(:,:,:),pointer:: scalars
+ integer,pointer:: mp_top_level
 
 !local variables:
  integer:: icount
@@ -822,6 +824,7 @@
 
  call mpas_pool_get_array(mesh,'zz'   ,zz   )
  call mpas_pool_get_array(mesh,'zgrid',zgrid)
+ call mpas_pool_get_array(mesh,'mp_top_level',mp_top_level)
 
  call mpas_pool_get_array(diag,'exner'           ,exner           )
  call mpas_pool_get_array(diag,'exner_base'      ,exner_b         )
@@ -849,7 +852,7 @@
 
 !update variables needed in the dynamical core:
  do j = jts,jte
- do k = kts,kte
+ do k = kts,mp_top_level
  do i = its,ite
 
     !initializes tendency of coupled potential temperature potential temperature, and
@@ -881,6 +884,18 @@
  enddo
  enddo
 
+ ! no microphysics updates above mp_top_level
+ ! why are we not applying this to theta and qv?
+ if(kte .gt. mp_top_level) then
+    do i = its,ite
+    do k = mp_top_level+1,kte
+       qc(k,i) = 0.
+       qr(k,i) = 0.
+       rt_diabatic_tend(k,i) = 0.
+    enddo
+    enddo
+ endif
+ 
 !update surface pressure and calculates the surface pressure tendency:
  do j = jts,jte
  do i = its,ite
@@ -917,7 +932,7 @@
        call mpas_pool_get_array(diag_physics,'refl10cm',refl10cm)
 
        do j = jts,jte
-       do k = kts,kte
+       do k = kts,mp_top_level
        do i = its,ite
           qi(k,i) = qi_p(i,k,j)
           qs(k,i) = qs_p(i,k,j)
@@ -931,6 +946,22 @@
        enddo
        enddo
        enddo
+
+       ! no microphysics updates above mp_top_level
+       if(kte .gt. mp_top_level) then
+          do i = its,ite
+          do k = mp_top_level+1,kte
+             qi(k,i) = 0.
+             qs(k,i) = 0.
+             qg(k,i) = 0.
+             rainprod(k,i) = 0.
+             evapprod(k,i) = 0.
+             re_cloud(k,i) = re_qc_bg
+             re_ice(k,i)   = re_qi_bg
+             re_snow(k,i)  = re_qs_bg
+          enddo
+          enddo
+       end if
 
        mp2_select: select case(trim(mp_scheme))
           case("mp_thompson","mp_thompson_aerosols")
@@ -993,8 +1024,8 @@
        call mpas_pool_get_array(tend_physics,'rqsmpten',rqsmpten)
        call mpas_pool_get_array(tend_physics,'rqgmpten',rqgmpten)
 
-       do k = kts,kte
        do i = its,ite
+       do k = kts,mp_top_level
           rthmpten(k,i) = (theta_m(k,i)/(1._RKIND+R_v/R_d*max(0._RKIND,qv(k,i)))-rthmpten(k,i))/dt_dyn
           rqvmpten(k,i) = (qv(k,i)-rqvmpten(k,i))/dt_dyn
           rqcmpten(k,i) = (qc(k,i)-rqcmpten(k,i))/dt_dyn
@@ -1004,6 +1035,21 @@
           rqgmpten(k,i) = (qg(k,i)-rqgmpten(k,i))/dt_dyn
        enddo
        enddo
+
+       ! no microphysics tendency above level mp_top_level
+       if(kte .gt. mp_top_level) then
+          do i = its, ite
+          do k = mp_top_level+1, kte
+             rthmpten(k,i) = 0.
+             rqvmpten(k,i) = 0.
+             rqcmpten(k,i) = 0.
+             rqrmpten(k,i) = 0.
+             rqimpten(k,i) = 0.
+             rqsmpten(k,i) = 0.
+             rqgmpten(k,i) = 0.
+          enddo
+          enddo
+       endif
 
        mp2_tend_select: select case(trim(mp_scheme))
           case("mp_thompson","mp_thompson_aerosols")
