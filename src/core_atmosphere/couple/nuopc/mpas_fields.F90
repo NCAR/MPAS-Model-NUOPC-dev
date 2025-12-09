@@ -35,7 +35,8 @@ module mpas_nuopc_fields
   logical, parameter :: TMP_IMPORT_T = .false.
   logical, parameter :: TMP_IMPORT_Q = .false.
 
-
+  type(ESMF_Mesh) :: mesh_esmf
+  logical :: mesh_esmf_initialized = .false.
 
 contains
 
@@ -62,14 +63,14 @@ contains
     do n = lbound(fieldList,1), ubound(fieldList,1)
        isPresent = NUOPC_FieldDictionaryHasEntry( &
             fieldList(n)%sd_name, rc=rc)
-       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       if (check(rc, __LINE__, file)) return
 
        if (.not.isPresent) then
           call NUOPC_FieldDictionaryAddEntry( &
                StandardName=trim(fieldList(n)%sd_name), &
                canonicalUnits=trim(fieldList(n)%units), &
                rc=rc)
-          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+          if (check(rc, __LINE__, file)) return
        end if
        ! print *, "field st name: ", trim(fieldList(n)%st_name)
     end do
@@ -204,16 +205,16 @@ contains
 !     ! exportable field: sea_surface_temperature
 !     ! call NUOPC_Advertise(exportState, &
 !     !      StandardName="sea_surface_temperature", name="sst", rc=rc)
-!     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+!     ! if (check(rc, __LINE__, file)) return
 !     ! ! exportable field: sea_surface_salinity
 !     ! call NUOPC_Advertise(exportState, &
 !     !      StandardName="sea_surface_salinity", name="sss", rc=rc)
-!     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+!     ! if (check(rc, __LINE__, file)) return
 !     ! ! exportable field: sea_surface_height_above_sea_level
 !     ! call NUOPC_Advertise(exportState, &
 !     !      StandardName="sea_surface_height_above_sea_level", &
 !     !      name="ssh", rc=rc)
-!     ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+!     ! if (check(rc, __LINE__, file)) return
 
 !   end subroutine advertise_fields_foo
 
@@ -248,7 +249,7 @@ contains
     logical :: realizeExport
     type(ESMF_Field) :: import_field, export_field
     ! type(ESMF_Grid) :: grid
-    type(ESMF_Mesh) :: mesh_esmf
+
 
     character(:), allocatable :: file
     real(ESMF_KIND_R8), pointer :: fptr(:)
@@ -262,25 +263,34 @@ contains
     print *, "MPAS: entering realize fields"
     if (did /= 0) error stop "Not prepared for parallel yet"
 
-    ! create ESMF mesh from MPAS mesh
-    mesh_esmf = create_esmf_mesh(domain)
+    if (.not. mesh_esmf_initialized) then
+       ! create ESMF mesh from MPAS mesh
+       mesh_esmf = create_esmf_mesh(domain)
+       mesh_esmf_initialized = .true.
+    else
+       stop "GOOD TO KNOW"
+    end if
 
     ! ! Read in mesh rather than create it, just easier
     ! mesh_file = "x1.40962.esmf.nc"
     ! mesh_esmf = ESMF_MeshCreate(filename=mesh_file,
     ! fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! if (check(rc, __LINE__, file)) return
     ! print *, "Read in mesh file: ", mesh_file
     ! call ESMF_LogWrite("Read in " // mesh_file, ESMF_LOGMSG_INFO, rc=rc)
 
-    call ESMF_MeshGet(mesh_esmf, nodeCount=numNodes, elementCount=numElements, rc=rc)
+    call ESMF_MeshGet(mesh_esmf, nodeCount=numNodes, &
+         elementCount=numElements, rc=rc)
     print *, "Mesh element count: ", numElements
     print *, "Mesh node count: ", numNodes
+
+
+    ! stop "halt and catch fire"
 
     ! ! Create Fields
     ! import_field = ESMF_FieldCreate(mesh_esmf, typekind=ESMF_TYPEKIND_R8, &
     !      meshloc=ESMF_MESHLOC_ELEMENT, name='temperature', rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! if (check(rc, __LINE__, file)) return
     ! print *, "Fields created"
     ! ! Access pointer to underlying data array
     ! call ESMF_FieldGet(import_field, farrayPtr=fptr, rc=rc)
@@ -299,7 +309,7 @@ contains
     ! query for importState and exportState
     call NUOPC_ModelGet(model, importState=importState, &
       exportState=exportState, rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    if (check(rc, __LINE__, file)) return
 
     call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
@@ -318,7 +328,7 @@ contains
                fieldName=trim(fieldList(n)%st_name), rc=rc)
           print*, "import field ", trim(fieldList(n)%st_name), " realized", &
                realizeImport
-          if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+          if (check(rc, __LINE__, file)) return
         end if
       else
         realizeImport = .false.
@@ -331,16 +341,16 @@ contains
          !      grid=grid, did=did, memflg=memr_import, rc=rc)
          import_field = field_create(domain, fieldList(n)%st_name, &
              mesh_esmf, did, nSoilLevels, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
 
          call NUOPC_Realize(importState, field=import_field, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
-         print*, "MPAS: importing field realized ", fieldList(n)%st_name
+         if (check(rc, __LINE__, file)) return
+         ! print*, "MPAS: importing field realized ", fieldList(n)%st_name
          fieldList(n)%rl_import = .true.
       else
          call ESMF_StateRemove(importState, (/fieldList(n)%st_name/), &
               relaxedflag=.true., rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
          fieldList(n)%rl_import = .false.
       end if
 
@@ -358,7 +368,7 @@ contains
          else
             realizeExport = NUOPC_IsConnected(exportState, &
                  fieldName = trim(fieldList(n)%st_name),rc=rc)
-            if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+            if (check(rc, __LINE__, file)) return
          end if
       else
         realizeExport = .false.
@@ -370,20 +380,20 @@ contains
         export_field = field_create(domain, fieldList(n)%st_name, &
              mesh_esmf, did, nSoilLevels, rc=rc)
              ! mesh, did, memr_export, rc=rc)
-        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        if (check(rc, __LINE__, file)) return
 
         call NUOPC_Realize(exportState, field=export_field, rc=rc)
-        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        if (check(rc, __LINE__, file)) return
 
         fieldList(n)%rl_export = .true.
-        print*, "MPAS: realize exporting field ", fieldList(n)%st_name
+        ! print*, "MPAS: realize exporting field ", fieldList(n)%st_name
         call ESMF_LogWrite("MPAS: exporting " // fieldList(n)%st_name, ESMF_LOGMSG_INFO, rc=rc)
       else
-         print *, "MPAS: realize remove export ", trim(fieldList(n)%st_name),&
-              " ---------------------------"
+         ! print *, "MPAS: realize remove export ", trim(fieldList(n)%st_name),&
+         !      " ---------------------------"
         call ESMF_StateRemove(exportState, (/fieldList(n)%st_name/), &
           relaxedflag=.true., rc=rc)
-        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        if (check(rc, __LINE__, file)) return
 
         fieldList(n)%rl_export = .false.
       end if
@@ -416,7 +426,7 @@ contains
 
     call NUOPC_ModelGet(model, importState=importState, &
       exportState=exportState, rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    if (check(rc, __LINE__, file)) return
 
     start = lbound(fieldList,1)
     end = ubound(fieldList,1)
@@ -434,7 +444,7 @@ contains
           TransferOfferGeomObject = transferOffer, &
           name = fieldList(i)%st_name, &
           rc = rc)
-        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        if (check(rc, __LINE__, file)) return
         print *, "MPAS: advertise import ", trim(fieldList(i)%st_name)
       end if
 
@@ -445,12 +455,12 @@ contains
           TransferOfferGeomObject = transferOffer, &
           name = fieldList(i)%st_name, &
           rc = rc)
-        if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+        if (check(rc, __LINE__, file)) return
         ! print *, "MPAS: advertise export ", trim(fieldList(i)%st_name)
-        print *, "MPAS: advertise export ", trim(fieldList(i)%sd_name), &
-             trim(fieldList(i)%st_name), &
-             trim(fieldList(i)%units), &
-             trim(transferOffer)
+        ! print *, "MPAS: advertise export ", trim(fieldList(i)%sd_name), &
+        !      trim(fieldList(i)%st_name), &
+        !      trim(fieldList(i)%units), &
+        !      trim(transferOffer)
       end if
     end do
     print *, "MPAS: Exiting Advertised Fields"
@@ -522,7 +532,7 @@ contains
               ungriddedLBound=(/1/), &
               ungriddedUBound=(/nSoilLevels/), rc=rc)
          ! indexflag=ESMF_INDEX_GLOBAL, &
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('slc') ! liquid soil moisture
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               farray=mpas_noahmp%sh2o(:,:), &
@@ -531,7 +541,7 @@ contains
               ungriddedUBound=(/nSoilLevels/), &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('stc')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               farray=mpas_noahmp%tslb(:,:), &
@@ -540,103 +550,103 @@ contains
               ungriddedUBound=(/nSoilLevels/), &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('sh2ox1')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sh2o(:,1), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('sh2ox2')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sh2o(:,2), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('sh2ox3')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sh2o(:,3), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('sh2ox4')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sh2o(:,4), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('smc1')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%smois(:,1), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('smc2')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%smois(:,2), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('smc3')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%smois(:,3), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('smc4')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%smois(:,4), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('smcmax1')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%smcmax_table(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('stc1') ! soil temperature
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%tslb(:,1), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('stc2')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%tslb(:,2), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('stc3')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%tslb(:,3), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('stc4')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%tslb(:,4), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('vegtyp')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%ivgtyp(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('sfchead')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sfcheadrt(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('infxsrt')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%infxsrt, &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('soldrain')
          print *, "soldrain allocated: ", allocated(mpas_noahmp%soldrain)
          print *, "soldrain shape: ", shape(mpas_noahmp%soldrain)
@@ -644,7 +654,7 @@ contains
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%soldrain, &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('sfcrunoff')
          print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff)
          print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff)
@@ -652,13 +662,13 @@ contains
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sfcrunoff(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case ('udrunoff')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%udrunoff(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+         if (check(rc, __LINE__, file)) return
       case default
          call ESMF_LogSetError(ESMF_FAILURE, &
               msg="Field hookup missing: "//trim(fld_name), &
@@ -672,16 +682,16 @@ contains
       !       typekind=ESMF_TYPEKIND_FIELD, gridToFieldMap=(/1,2/), &
       !       ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
       !       indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-      !     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      !     if (check(rc, __LINE__, file)) return
       !   case default
       !     field = ESMF_FieldCreate(name=fld_name, grid=grid, &
       !       typekind=ESMF_TYPEKIND_FIELD, &
       !       indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-      !     if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      !     if (check(rc, __LINE__, file)) return
       ! end select
       ! call ESMF_FieldFill(field, dataFillScheme="const", &
       !   const1=ESMF_MISSING_VALUE, rc=rc)
-      ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+      ! if (check(rc, __LINE__, file)) return
     ! else
     !   cmemflg = memflg
     !   call ESMF_LogSetError(ESMF_FAILURE, &

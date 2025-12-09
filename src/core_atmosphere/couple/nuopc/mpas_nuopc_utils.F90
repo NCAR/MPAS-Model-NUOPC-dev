@@ -2,24 +2,26 @@ module mpas_nuopc_utils
   use esmf
   use nuopc
   implicit none
+
+  character(len=ESMF_MAXSTR), parameter :: file = __FILE__
+
 contains
   subroutine hydroWeightGeneration()
     type(ESMF_Mesh) :: mesh, grid
     integer :: rc
-    character(:), allocatable :: file, mesh_file, weight_file
-    file = __FILE__
+    character(:), allocatable :: mesh_file, weight_file
     rc = ESMF_SUCCESS
 
     ! mesh_file = "x1.40962.esmf.nc"
     mesh_file = "frontrange.scrip.nc"
     mesh = ESMF_MeshCreate(filename=mesh_file, &
          fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    if (check(rc, __LINE__, file)) return
     print *, "Read in mesh file: ", mesh_file
 
     ! grid = ESMF.Grid(filename="wrfhydro_grid.nc", &
     !      filetype=ESMF.FileFormat.SCRIP, rc=rc)
-    ! if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    ! if (check(rc, __LINE__, file)) return
     ! print *, "Read in WRF-Hydro grid: ", mesh_file
 
     ! weight_file = "foo_weight.nc"
@@ -36,16 +38,14 @@ contains
   function gridCreate(rc) result(grid)
     integer, intent(out) :: rc
     type(ESMF_Grid) :: grid
-    character(:), allocatable :: file
     rc = ESMF_SUCCESS
-    file = __FILE__
 
     print *, "TODO gridCreate in utils: move reading in MPAS mesh to here"
     ! grid = ESMF_GridCreate(name='MPAS_Grid'
     !      distgrid=WRFHYDRO_DistGrid, coordSys = ESMF_COORDSYS_SPH_DEG, &
     !      coordTypeKind=ESMF_TYPEKIND_COORD, &
     !      rc = rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    if (check(rc, __LINE__, file)) return
   end function gridCreate
 
   function create_esmf_mesh(domain) result(mesh)
@@ -53,13 +53,68 @@ contains
     use mpas_pool_routines, only: mpas_pool_get_subpool, mpas_pool_get_dimension
     type(domain_type), intent(in)    :: domain
     type (mpas_pool_type), pointer :: mpas_mesh
-    type(ESMF_Mesh) :: mesh
-    integer, pointer :: nCellsSolve, nSoilLevels
+    type(ESMF_Mesh) :: mesh, mesh_in
+    ! integer, pointer :: nCellsSolve, nSoilLevels
 
     character(:), allocatable :: file, mesh_file
     integer :: rc
+    integer :: ncount, nelem
+    type(ESMF_DistGrid) :: distgrid
+    type(ESMF_VM)       :: vm
+    integer, allocatable :: gindex(:)
+    character(len=256) :: iomsg
+    integer :: unit, iostat, irank, localCount
+    integer :: rank, np
+    integer :: idx, inode
+
     file = __FILE__
     rc = ESMF_SUCCESS
+
+    ! add the following to make generic
+    call ESMF_VMGetGlobal(vm, rc=rc)
+    if (check(rc, __LINE__, file)) return
+    call ESMF_VMGet(vm, localPet=rank, petCount=np, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    ! read
+    open(newunit=unit, file='frontrange.graph.info.part.2', &
+         status='old', action='read', iostat=iostat, iomsg=iomsg)
+    if (iostat /= 0) then
+       print *, trim(iomsg)
+       stop "Error opening [casename].graph.info.part.[np]"
+    end if
+
+    localCount = 0
+    do
+       read(unit, *, iostat=iostat) irank
+       if (iostat /= 0) exit
+       if (irank == rank) localCount = localCount + 1
+    end do
+
+    allocate(gindex(localCount))
+
+    print *, rank, "/", np, ": with localCount =", localCount
+
+    ! setup grid distribution
+    rewind(unit)
+    idx   = 0
+    inode = 0
+
+    do
+       read(unit, *, iostat=iostat) irank
+       if (iostat /= 0) exit
+
+       inode = inode + 1 ! inode = line number
+       if (irank == rank) then
+          idx = idx + 1
+          gindex(idx) = inode ! seqIndex = global node id
+       end if
+    end do
+    close(unit)
+
+
+    distgrid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
+    if (check(rc, __LINE__, file)) return
 
     ! call mpas_pool_get_subpool(domain%blocklist%structs, 'mesh', mpas_mesh)
     ! call mpas_pool_get_dimension(mpas_mesh,'nCellsSolve',nCellsSolve)
@@ -70,42 +125,46 @@ contains
     ! print *, "nVertLevels, maxEdges, maxEdges2, num_scalars", nVertLevels,
     ! maxEdges, maxEdges2, num_scalars
 
-    ! Now create the ESMF Mesh
-    ! mesh = ESMF_MeshCreate(parametricDim=2, spatialDim=2,                   &
-    !      coordSys=ESMF_COORDSYS_SPH_RAD, rc=rc)
-
-    ! call ESMF_MeshAddNodes(mesh, nodeCount=nVertices,                       &
-    !      nodeIds=nodeIds, nodeCoords=nodeCoords, nodeOwners=nodeOwners, rc=rc)
-
-    ! call ESMF_MeshAddElements(mesh, elemCount=nCells,                       &
-    !      elementIds=elemIds, elementTypes=elemTypes,                        &
-    !      elementConn=elemConn, elementConnIndex=elemConnIndex, rc=rc)
-
-    ! call ESMF_MeshComplete(mesh, rc=rc)
-
-
     ! Reading in mesh file after converting frontrange.grid.nc to scrip format
     ! mpas-dev.github.io/MPAS-Tools/0.24.0/_modules/mpas_tools/scrip/from_mpas.html
 
     mesh_file = "frontrange.scrip.nc"
+    print *, "todo: read mesh_file name from namelist, currently ", trim(mesh_file)
     mesh = ESMF_MeshCreate(filename=mesh_file, &
+         elementDistgrid=distgrid, &
          fileformat=ESMF_FILEFORMAT_SCRIP, rc=rc)
-    if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+    if (check(rc, __LINE__, file)) return
+
+    call ESMF_MeshWrite(mesh, "mpas_mesh", rc=rc)
+
+    ! Get dimensions/counts
+    call ESMF_MeshGet(mesh, nodeCount=ncount, elementCount=nElem, rc=rc)
+    print *, "MPAS: ncount=", ncount, "nelem=", nelem
 
   end function create_esmf_mesh
 
 
-  function check(rc, msg, line, file) result(res)
+  function check(rc, line, file_in) result(res)
     integer, intent(in) :: rc
-    character(len=*), intent(in) :: msg
+    ! character(len=*), intent(in) :: msg
     integer, intent(in) :: line
-    character(len=*), intent(in) :: file
+    character(len=*), intent(in) :: file_in
     logical :: res
-    res = ESMF_LogFoundError(rcToCheck=rc, msg=msg, line=line, file=file)
+    res = ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+         line=line, file=file_in)
     ! this won't work properly in parallel
-    if (res .eqv. .true.) error stop "Bad Check, msg = " // msg
+    if (res .eqv. .true.) error stop "Bad Check, msg = " // ESMF_LOGERR_PASSTHRU
   end function check
 
+  subroutine printa(msg)
+    character(len=*), intent(in) :: msg
+    integer :: rc
+    logical :: rc_l
+    print *, "MPAS: ", trim(msg)
+    call ESMF_LogWrite("MPAS: "//trim(msg), ESMF_LOGMSG_INFO, rc=rc)
+    rc_l = check(rc, __LINE__, file)
+    ! TODO: FIX RC_L TYPE
+  end subroutine printa
 
   subroutine probe_connected_pair(expState, impState, name, rc)
     type(ESMF_State), intent(inout) :: expState, impState
@@ -113,8 +172,6 @@ contains
     integer, intent(out) :: rc
     type(ESMF_Field) :: fe, fi
     logical :: ce, ci
-    character(:), allocatable :: file
-    file = __FILE__
     rc = ESMF_SUCCESS
 
     ce = NUOPC_IsConnected(expState, fieldName=trim(name), rc=rc)
@@ -122,15 +179,15 @@ contains
     write(*,'(A,1X,A,1X,L1,1X,L1)') 'Connected(exp,imp):', trim(name), ce, ci
     if (ce) then
        call ESMF_StateGet(expState, itemName=trim(name), field=fe, rc=rc)
-       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       if (check(rc, __LINE__, file)) return
        call ESMF_FieldValidate(fe, rc=rc)
-       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       if (check(rc, __LINE__, file)) return
     end if
     if (ci) then
        call ESMF_StateGet(impState, itemName=trim(name), field=fi, rc=rc)
-       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       if (check(rc, __LINE__, file)) return
        call ESMF_FieldValidate(fi, rc=rc)
-       if (check(rc, ESMF_LOGERR_PASSTHRU, __LINE__, file)) return
+       if (check(rc, __LINE__, file)) return
     end if
   end subroutine probe_connected_pair
 
