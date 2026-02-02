@@ -43,6 +43,7 @@ module mpas_atm_nuopc
   character(len=StrKIND) :: input_stream, read_time
   integer :: stream_dir
   real (kind=R8KIND) :: integ_start_time, integ_stop_time
+  logical :: io_rank = .false.
 
   ! public SetServices
   public SetVM, SetServices
@@ -133,6 +134,7 @@ contains
     use mpas_nuopc_fields, only : advertise_fields, get_field_list, &
          cap_field_t, add_field_dictionary
     use mpas_derived_types, only : core_type, domain_type
+    use mpas_atmphys_vars, only: mpas_noahmp
     type(ESMF_GridComp) :: model
     integer, intent(out) :: rc
     character(:), allocatable :: file
@@ -170,6 +172,7 @@ contains
     if (check(rc, __LINE__, file)) return
 
     print *, "MPAS: rank =", rank
+    if (rank == 0) io_rank = .true.
     call mpas_init(corelist, domain, external_comm=EXTERNAL_COMM_WORLD)
     call ESMF_LogWrite("MPAS: finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
@@ -505,6 +508,7 @@ contains
   !-----------------------------------------------------------------------------
 
   subroutine Advance(model, rc)
+    use mpas_atmphys_vars, only: mpas_noahmp
     !$  use omp_lib
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -522,15 +526,47 @@ contains
 
     ! stop "DEBUGGING CLOCKS, STOPPING IN MPAS ADVANCE"
 
+
+
+    ! print *, "mpas_noahmp%sfcrunoff(1:4) =", mpas_noahmp%sfcrunoff(1:4)
+    ! stop "FOO mpas sfcrunoff investigation"
+
+    type(ESMF_Field) :: f
+    real(ESMF_KIND_R8), pointer :: ptr(:)
+
     file = __FILE__
     rc = ESMF_SUCCESS
     call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
+
+    call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
+         exportState=exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (check(rc, __LINE__, file)) return
+    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+
+    mpas_noahmp%sfcrunoff(:) = -888
+
+    ! call NUOPC_ModelGet(model, importState=importState, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    ! call ESMF_StateGet(importState, "sfcrunoff", field=f, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    ! call ESMF_FieldGet(f, farrayPtr=ptr, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+    ! print *, "sfcrunoff ptr =", ptr
+
+
     ! stop "FIGURING OUT MPAS PARALLEL"
     ! this mpas_run calls atm_core_run and runs the whole model
     ! call mpas_run(domain)
     ! atm_core_run_advance takes a single timestep
-    print *, "MPAS: itimestep =", itimestep
+    if (io_rank) print *, "MPAS: itimestep =", itimestep
+    ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
+    ! print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
     ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
          config_apply_lbcs, input_start_time, &
          input_stop_time, output_start_time, output_stop_time, &
@@ -539,7 +575,10 @@ contains
          diag_start_time, diag_stop_time, &
          dt, itimestep, state, mesh, diag, diag_physics, &
          tend, tend_physics, config_restart_timestamp_name)
-    print *, "atm_core_run_advance ierr =", ierr
+    if (ierr /= 0) then
+       print *, "atm_core_run_advance ierr =", ierr
+       error stop "atm_core_run_advance ierr != 0"
+    end if
     ! call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
 
 

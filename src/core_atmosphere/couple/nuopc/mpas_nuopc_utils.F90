@@ -4,6 +4,7 @@ module mpas_nuopc_utils
   implicit none
 
   character(len=ESMF_MAXSTR), parameter :: file = __FILE__
+  logical, parameter :: debug = .false.
 
 contains
   subroutine hydroWeightGeneration()
@@ -62,7 +63,7 @@ contains
     type(ESMF_DistGrid) :: distgrid
     type(ESMF_VM)       :: vm
     integer, allocatable :: gindex(:)
-    character(len=256) :: iomsg
+    character(len=256) :: iomsg, mpas_graph_file
     integer :: unit, iostat, irank, localCount
     integer :: rank, np
     integer :: idx, inode
@@ -77,7 +78,13 @@ contains
     if (check(rc, __LINE__, file)) return
 
     ! read
-    open(newunit=unit, file='frontrange.graph.info.part.2', &
+    if (np == 1) then
+       mpas_graph_file = 'frontrange.graph.info'
+    else
+       write(mpas_graph_file, '(A,I0)') 'frontrange.graph.info.part.', np
+    end if
+    print *, "MPAS: mpas_graph_file =", mpas_graph_file
+    open(newunit=unit, file=mpas_graph_file, &
          status='old', action='read', iostat=iostat, iomsg=iomsg)
     if (iostat /= 0) then
        print *, trim(iomsg)
@@ -135,10 +142,12 @@ contains
          fileformat=ESMF_FILEFORMAT_SCRIP, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    call ESMF_MeshWrite(mesh, "mpas_mesh", rc=rc)
+    if (debug) call ESMF_MeshWrite(mesh, "mpas_mesh", rc=rc)
+    if (check(rc, __LINE__, file)) return
 
     ! Get dimensions/counts
     call ESMF_MeshGet(mesh, nodeCount=ncount, elementCount=nElem, rc=rc)
+    if (check(rc, __LINE__, file)) return
     print *, "MPAS: ncount=", ncount, "nelem=", nelem
 
   end function create_esmf_mesh

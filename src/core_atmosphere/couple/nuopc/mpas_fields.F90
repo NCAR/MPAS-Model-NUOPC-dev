@@ -33,10 +33,11 @@ module mpas_nuopc_fields
   logical, parameter :: TMP_EXPORT_T = .false.
   logical, parameter :: TMP_EXPORT_TT = .false.
   logical, parameter :: TMP_IMPORT_T = .false.
-  logical, parameter :: TMP_IMPORT_Q = .false.
+  logical, parameter :: TMP_IMPORT_Q = .true.
 
   type(ESMF_Mesh) :: mesh_esmf
   logical :: mesh_esmf_initialized = .false.
+  logical, parameter :: debug = .false.
 
 contains
 
@@ -75,7 +76,7 @@ contains
        ! print *, "field st name: ", trim(fieldList(n)%st_name)
     end do
 
-  print *, "FIELD DICTIONARY ADDED"
+    if (debug) print *, "FIELD DICTIONARY ADDED"
   end subroutine add_field_dictionary
 
 
@@ -117,15 +118,15 @@ contains
       add_field("vegetation_type","vegtyp", "1", &
         IMPORT_F, EXPORT_F, 16.0d0), &
       add_field("surface_water_depth","sfchead", "mm", &
-        IMPORT_F, EXPORT_F, 0.00d0), &
+        IMPORT_T, EXPORT_F, 0.00d0), &
       add_field("time_step_infiltration_excess","infxsrt", "mm", &
         IMPORT_T, EXPORT_T, 0.00d0), &
       add_field("soil_column_drainage","soldrain", "mm", &
-        IMPORT_T, EXPORT_T, 0.00d0) &
-      ! ,add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
-      !   TMP_IMPORT_Q, EXPORT_T, 0.00d0), &
-      ! add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
-      !   TMP_IMPORT_Q, EXPORT_T, 0.00d0) &
+        IMPORT_T, EXPORT_T, 0.00d0), &
+      add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
+        IMPORT_T, EXPORT_F, 0.00d0), &
+      add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
+        IMPORT_T, EXPORT_F, 0.00d0) &
         ]
 
     ! add NoahMP Variables that MPAS provides
@@ -281,8 +282,8 @@ contains
 
     call ESMF_MeshGet(mesh_esmf, nodeCount=numNodes, &
          elementCount=numElements, rc=rc)
-    print *, "Mesh element count: ", numElements
-    print *, "Mesh node count: ", numNodes
+    if (debug) print *, "Mesh element count: ", numElements
+    if (debug) print *, "Mesh node count: ", numNodes
 
 
     ! stop "halt and catch fire"
@@ -326,8 +327,11 @@ contains
         else
           realizeImport = NUOPC_IsConnected(importState, &
                fieldName=trim(fieldList(n)%st_name), rc=rc)
-          print*, "import field ", trim(fieldList(n)%st_name), " realized", &
-               realizeImport
+          if (debug) print*, "import field ", trim(fieldList(n)%st_name), &
+               " realized", realizeImport
+          print*, "import field ", trim(fieldList(n)%st_name), &
+               " realized", realizeImport
+
           if (check(rc, __LINE__, file)) return
         end if
       else
@@ -345,7 +349,7 @@ contains
 
          call NUOPC_Realize(importState, field=import_field, rc=rc)
          if (check(rc, __LINE__, file)) return
-         ! print*, "MPAS: importing field realized ", fieldList(n)%st_name
+         call ESMF_LogWrite("MPAS: importing " // fieldList(n)%st_name, ESMF_LOGMSG_INFO, rc=rc)
          fieldList(n)%rl_import = .true.
       else
          call ESMF_StateRemove(importState, (/fieldList(n)%st_name/), &
@@ -400,6 +404,7 @@ contains
     end do
 
     print *, "MPAS: exiting realize fields"
+    ! stop "ACTUALLY STOPPING"
   end subroutine realize_fields
 
 
@@ -445,7 +450,8 @@ contains
           name = fieldList(i)%st_name, &
           rc = rc)
         if (check(rc, __LINE__, file)) return
-        print *, "MPAS: advertise import ", trim(fieldList(i)%st_name)
+        if (debug) print *, "MPAS: advertise import ", &
+             trim(fieldList(i)%st_name)
       end if
 
       if (fieldList(i)%ad_export) then
