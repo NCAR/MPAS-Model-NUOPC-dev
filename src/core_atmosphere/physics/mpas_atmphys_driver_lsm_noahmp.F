@@ -1089,7 +1089,13 @@
  ! print *, its, ite, ":: 1 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
  do i = mpas_noahmp%its,mpas_noahmp%ite
     mpas_noahmp%sfcrunoff(i) = mpas_noahmp%sfcrunoff_import(i)
+    mpas_noahmp%smois(i,1) = mpas_noahmp%smois_import(i,1)
+    mpas_noahmp%smois(i,2) = mpas_noahmp%smois_import(i,2)
+    mpas_noahmp%smois(i,3) = mpas_noahmp%smois_import(i,3)
+    mpas_noahmp%smois(i,4) = mpas_noahmp%smois_import(i,4)
  end do
+
+
  do ns = 1, mpas_noahmp%nsoil
     do i = mpas_noahmp%its,mpas_noahmp%ite
        ! mpas_noahmp%smois(i,ns) = mpas_noahmp%smois_import(i,1)
