@@ -22,8 +22,8 @@ contains
     implicit none
 
     type(NoahmpIO_type), intent(inout) :: NoahmpIO
-   
-! ------------------------------------------------- 
+
+! -------------------------------------------------
     associate(                               &
               nsoil   =>  NoahmpIO%nsoil    ,&
               nsnow   =>  NoahmpIO%nsnow     &
@@ -67,7 +67,7 @@ contains
     if ( allocated (NoahmpIO%u_phy)     ) deallocate ( NoahmpIO%u_phy               ) ! 3d u wind component [m/s]
     if ( allocated (NoahmpIO%v_phy)     ) deallocate ( NoahmpIO%v_phy               ) ! 3d v wind component [m/s]
     if ( allocated (NoahmpIO%p8w)       ) deallocate ( NoahmpIO%p8w                 ) ! 3d pressure, valid at interface [Pa]
- 
+
     ! spatial varying parameter map
     if ( NoahmpIO%iopt_soil > 1 ) then
        if ( allocated (NoahmpIO%soilcomp)) deallocate ( NoahmpIO%soilcomp           ) ! soil sand and clay content [fraction]
@@ -122,6 +122,7 @@ contains
     if ( allocated (NoahmpIO%smstav)   ) deallocate ( NoahmpIO%smstav               ) ! soil moisture avail. [not used]
     if ( allocated (NoahmpIO%smstot)   ) deallocate ( NoahmpIO%smstot               ) ! total soil water [mm][not used]
     if ( allocated (NoahmpIO%sfcrunoff)) deallocate ( NoahmpIO%sfcrunoff            ) ! accumulated surface runoff [m]
+    if ( allocated (NoahmpIO%sfcrunoff_import)) deallocate ( NoahmpIO%sfcrunoff_import)
     if ( allocated (NoahmpIO%udrunoff) ) deallocate ( NoahmpIO%udrunoff             ) ! accumulated sub-surface runoff [m]
     if ( allocated (NoahmpIO%albedo)   ) deallocate ( NoahmpIO%albedo               ) ! total grid albedo []
     if ( allocated (NoahmpIO%snowc)    ) deallocate ( NoahmpIO%snowc                ) ! snow cover fraction []
@@ -134,7 +135,9 @@ contains
     if ( allocated (NoahmpIO%qsfc)     ) deallocate ( NoahmpIO%qsfc                 ) ! bulk surface specific humidity
     if ( allocated (NoahmpIO%smoiseq)  ) deallocate ( NoahmpIO%smoiseq              ) ! equilibrium volumetric soil moisture [m3/m3]
     if ( allocated (NoahmpIO%smois)    ) deallocate ( NoahmpIO%smois                ) ! volumetric soil moisture [m3/m3]
+    if ( allocated (NoahmpIO%smois_import)) deallocate ( NoahmpIO%smois_import      ) ! volumetric soil moisture [m3/m3]
     if ( allocated (NoahmpIO%sh2o)     ) deallocate ( NoahmpIO%sh2o                 ) ! volumetric liquid soil moisture [m3/m3]
+    if ( allocated (NoahmpIO%sh2o_import)) deallocate ( NoahmpIO%sh2o_import        ) ! volumetric liquid soil moisture [m3/m3]
     if ( allocated (NoahmpIO%tslb)     ) deallocate ( NoahmpIO%tslb                 ) ! soil temperature [K]
 
     ! INOUT (with no Noah LSM equivalent) (as defined in WRF)
@@ -192,8 +195,8 @@ contains
     if ( allocated (NoahmpIO%irfivol) ) deallocate ( NoahmpIO%irfivol               ) ! amount of irrigation by micro (mm)
     if ( allocated (NoahmpIO%irrsplh) ) deallocate ( NoahmpIO%irrsplh               ) ! latent heating from sprinkler evaporation (W/m2)
     if ( allocated (NoahmpIO%loctim)  ) deallocate ( NoahmpIO%loctim                ) ! local time
-  
-    ! OUT (with no Noah LSM equivalent) (as defined in WRF)   
+
+    ! OUT (with no Noah LSM equivalent) (as defined in WRF)
     if ( allocated (NoahmpIO%t2mvxy)     ) deallocate ( NoahmpIO%t2mvxy             ) ! 2m temperature of vegetation part
     if ( allocated (NoahmpIO%t2mbxy)     ) deallocate ( NoahmpIO%t2mbxy             ) ! 2m temperature of bare ground part
     if ( allocated (NoahmpIO%t2mxy)      ) deallocate ( NoahmpIO%t2mxy              ) ! 2m grid-mean temperature
@@ -336,7 +339,7 @@ contains
        if ( allocated (NoahmpIO%hgt_urb2d)  ) deallocate ( NoahmpIO%hgt_urb2d       )
        if ( allocated (NoahmpIO%ust)        ) deallocate ( NoahmpIO%ust             )
     endif
-         
+
     if(NoahmpIO%sf_urban_physics == 1 ) then  ! single layer urban model
        if ( allocated (NoahmpIO%cmr_sfcdif)   ) deallocate ( NoahmpIO%cmr_sfcdif    )
        if ( allocated (NoahmpIO%chr_sfcdif)   ) deallocate ( NoahmpIO%chr_sfcdif    )
@@ -456,10 +459,10 @@ contains
     if ( allocated (NoahmpIO%soldrain)  ) deallocate ( NoahmpIO%soldrain            )
     if ( allocated (NoahmpIO%qtiledrain)) deallocate ( NoahmpIO%qtiledrain          )
     if ( allocated (NoahmpIO%zwatble2d) ) deallocate ( NoahmpIO%zwatble2d           )
-#endif    
+#endif
 
     end associate
- 
+
   end subroutine NoahmpIOVarFinalizeDefault
 
 end module NoahmpIOVarFinalizeMod

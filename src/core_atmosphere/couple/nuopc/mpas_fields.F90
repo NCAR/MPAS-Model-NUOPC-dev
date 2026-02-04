@@ -489,6 +489,7 @@ contains
        result(field)
     use mpas_derived_types, only: domain_type
     use mpas_atmphys_vars, only: mpas_noahmp, smois_p
+    use mpas_pool_routines, only: mpas_pool_get_array
     ! arguments
     type(domain_type), intent(in) :: rt_domain
     ! type (domain_type), intent(in) :: rt_domain(:)
@@ -560,48 +561,52 @@ contains
       case ('sh2ox1')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o(:,1), &
+              farray=mpas_noahmp%sh2o_import(:,1), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox2')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o(:,2), &
+              farray=mpas_noahmp%sh2o_import(:,2), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox3')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o(:,3), &
+              farray=mpas_noahmp%sh2o_import(:,3), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox4')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o(:,4), &
+              farray=mpas_noahmp%sh2o_import(:,4), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc1')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
+              ! farray=mpas_noahmp%smois_import(:,1), &
               farray=mpas_noahmp%smois(:,1), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc2')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
+              ! farray=mpas_noahmp%smois_import(:,2), &
               farray=mpas_noahmp%smois(:,2), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc3')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
+              ! farray=mpas_noahmp%smois_import(:,3), &
               farray=mpas_noahmp%smois(:,3), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc4')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
+              ! farray=mpas_noahmp%smois_import(:,4), &
               farray=mpas_noahmp%smois(:,4), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
@@ -662,11 +667,12 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sfcrunoff')
-         print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff)
-         print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff)
+         print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff_import)
+         print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff_import)
+
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sfcrunoff(:), &
+              farray=mpas_noahmp%sfcrunoff_import(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('udrunoff')

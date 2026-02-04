@@ -24,7 +24,7 @@
  private
  public:: driver_lsm_noahmp
 
- 
+
  contains
 
 
@@ -47,9 +47,9 @@
  type(mpas_pool_type),intent(in):: diag_physics
  type(mpas_pool_type),intent(in):: diag_physics_noahmp
  type(mpas_pool_type),intent(in):: output_noahmp
- type(mpas_pool_type),intent(in):: sfc_input 
+ type(mpas_pool_type),intent(in):: sfc_input
 
- 
+
 !--- local variables and arrays:
  logical,pointer:: do_restart
 
@@ -125,7 +125,7 @@
  mpas_noahmp%yr        = year
  mpas_noahmp%month     = month
  mpas_noahmp%day       = day
- mpas_noahmp%julian    = curr_julday 
+ mpas_noahmp%julian    = curr_julday
 
 
 !--- initialization of xice_threshold:
@@ -600,7 +600,7 @@
  call mpas_pool_get_array(diag,'pressure_p'            ,pressure_p)
  call mpas_pool_get_array(diag,'uReconstructZonal'     ,u         )
  call mpas_pool_get_array(diag,'uReconstructMeridional',v         )
- 
+
  call mpas_pool_get_array(state,'theta_m',theta_m,time_lev)
  call mpas_pool_get_array(state,'scalars',scalars,time_lev)
 
@@ -1060,7 +1060,7 @@
  type(mpas_pool_type),intent(in):: diag
  type(mpas_pool_type),intent(in):: state
 
- integer,intent(in):: itimestep,its,ite
+ integer,intent(in):: itimestep, its, ite
  integer,intent(in):: time_lev
 
 !--- inout arguments:
@@ -1068,21 +1068,51 @@
  type(mpas_pool_type),intent(inout):: diag_physics_noahmp
  type(mpas_pool_type),intent(inout):: output_noahmp
  type(mpas_pool_type),intent(inout):: sfc_input
- 
 
+ integer :: i, ns
 !-----------------------------------------------------------------------------------------------------------------
 !call mpas_log_write(' ')
 !call mpas_log_write('--- enter subroutine driver_lsm_noahmp:')
 
+ ! print *, "0 SFCRUNOFF_IMPORT(1:4)=",mpas_noahmp%sfcrunoff_import(1:4)
+ ! mpas_noahmp%sfcrunoff(:) = mpas_noahmp%sfcrunoff_import(:)
+ ! print *, "1 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(1:4)
+ ! this resets it!!!
  call lsm_noahmp_fromMPAS(configs,mesh,diag,diag_physics,diag_physics_noahmp,output_noahmp,sfc_input, &
                           state,time_lev,itimestep)
 
- call NoahmpDriverMain(mpas_noahmp)
+ ! its   = mpas_noahmp%its
+ ! ite   = mpas_noahmp%ite
 
+ ! debug
+ ! print *, "noahmp its ite",  mpas_noahmp%its, mpas_noahmp%ite
+ ! print *, its, ite, ":: 1 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
+ do i = mpas_noahmp%its,mpas_noahmp%ite
+    mpas_noahmp%sfcrunoff(i) = mpas_noahmp%sfcrunoff_import(i)
+ end do
+ do ns = 1, mpas_noahmp%nsoil
+    do i = mpas_noahmp%its,mpas_noahmp%ite
+       ! mpas_noahmp%smois(i,ns) = mpas_noahmp%smois_import(i,1)
+       ! mpas_noahmp%smois(i,ns)   = smois(ns,i)
+       ! mpas_noahmp%sh2o(i,ns)    = sh2o(ns,i)
+       ! mpas_noahmp%tslb(i,ns)    = tslb(ns,i)
+    enddo
+ enddo
+
+
+ ! print *, its, ite, ":: 2 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
+
+ call NoahmpDriverMain(mpas_noahmp)
+ ! print *, its, ite, ":: 3 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
+
+
+ ! old debug
+ ! print *, its, ite, ":: 4 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(its:its+4)
 
 !call mpas_log_write('--- end subroutine driver_lsm_noahmp:')
 
+ ! stop "testing where it gets reset"
  end subroutine driver_lsm_noahmp
 
 !=================================================================================================================

@@ -79,7 +79,7 @@ module NoahmpIOVarType
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  xice                ! fraction of grid that is seaice
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  seaice              ! seaice fraction
 
-    ! forcings    
+    ! forcings
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::    t_phy             ! 3D atmospheric temperature valid at mid-levels [K]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::    qv_curr           ! 3D water vapor mixing ratio [kg/kg_dry]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::    u_phy             ! 3D U wind component [m/s]
@@ -161,12 +161,15 @@ module NoahmpIOVarType
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  smstav              ! soil moisture avail. [not used]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  smstot              ! total soil water [mm][not used]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  sfcrunoff           ! accumulated surface runoff [m]
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  sfcrunoff_import    ! accumulated surface runoff [m]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  udrunoff            ! accumulated sub-surface runoff [m]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  albedo              ! total grid albedo []
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  snowc               ! snow cover fraction []
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  smoiseq             ! volumetric soil moisture [m3/m3]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  smois               ! volumetric soil moisture [m3/m3]
+    real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  smois_import        ! volumetric soil moisture [m3/m3]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  sh2o                ! volumetric liquid soil moisture [m3/m3]
+    real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  sh2o_import         ! volumetric liquid soil moisture [m3/m3]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  tslb                ! soil temperature [K]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  snow                ! snow water equivalent [mm]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  snowh               ! physical snow depth [m]
@@ -231,7 +234,7 @@ module NoahmpIOVarType
     real(kind=kind_noahmp), allocatable, dimension(:)      :: irfivol              ! amount of irrigation by micro (mm)
     real(kind=kind_noahmp), allocatable, dimension(:)      :: irrsplh              ! latent heating from sprinkler evaporation (W/m2)
     real(kind=kind_noahmp), allocatable, dimension(:)      :: loctim               ! local time
- 
+
     ! OUT (with no Noah LSM equivalent) (as defined in WRF)
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  t2mvxy              ! 2m temperature of vegetation part [K]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  t2mbxy              ! 2m temperature of bare ground part [K]
@@ -588,7 +591,7 @@ module NoahmpIOVarType
     character(len=256)                                     ::  indir
     ! nsoil defined above
     integer                                                ::  forcing_timestep
-    integer                                                ::  noah_timestep      
+    integer                                                ::  noah_timestep
     integer                                                ::  start_year
     integer                                                ::  start_month
     integer                                                ::  start_day
@@ -641,7 +644,7 @@ module NoahmpIOVarType
     logical                                                ::  skip_first_output
     integer                                                ::  khour
     integer                                                ::  kday
-    real(kind=kind_noahmp)                                 ::  zlvl 
+    real(kind=kind_noahmp)                                 ::  zlvl
     character(len=256)                                     ::  hrldas_setup_file
     character(len=256)                                     ::  spatial_filename
     character(len=256)                                     ::  external_veg_filename_template
@@ -652,7 +655,7 @@ module NoahmpIOVarType
     real(kind=kind_noahmp),  allocatable, dimension(:)     ::  soil_thick_input
 
 !----------------------------------------------------------------
-! Noahmp Parameters Table 
+! Noahmp Parameters Table
 !----------------------------------------------------------------
 
     ! vegetation parameters

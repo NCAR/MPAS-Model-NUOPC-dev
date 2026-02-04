@@ -525,9 +525,6 @@ contains
     integer :: ierr
 
     ! stop "DEBUGGING CLOCKS, STOPPING IN MPAS ADVANCE"
-
-
-
     ! print *, "mpas_noahmp%sfcrunoff(1:4) =", mpas_noahmp%sfcrunoff(1:4)
     ! stop "FOO mpas sfcrunoff investigation"
 
@@ -549,24 +546,15 @@ contains
     if (check(rc, __LINE__, file)) return
 
 
-    mpas_noahmp%sfcrunoff(:) = -888
-
-    ! call NUOPC_ModelGet(model, importState=importState, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-    ! call ESMF_StateGet(importState, "sfcrunoff", field=f, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-    ! call ESMF_FieldGet(f, farrayPtr=ptr, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-    ! print *, "sfcrunoff ptr =", ptr
-
-
-    ! stop "FIGURING OUT MPAS PARALLEL"
-    ! this mpas_run calls atm_core_run and runs the whole model
-    ! call mpas_run(domain)
-    ! atm_core_run_advance takes a single timestep
-    if (io_rank) print *, "MPAS: itimestep =", itimestep
+    ! this disappears after atm_core_run_advance
+    ! mpas_noahmp%sfcrunoff(:) = -888
+    ! this prints -888
     ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
-    ! print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
+    ! stop "hi"
+
+
+    if (io_rank) print *, "MPAS: itimestep =", itimestep
+    ! atm_core_run_advance takes a single timestep
     ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
          config_apply_lbcs, input_start_time, &
          input_stop_time, output_start_time, output_stop_time, &
