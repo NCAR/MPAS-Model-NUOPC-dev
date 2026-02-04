@@ -629,17 +629,6 @@
 			<var name="cell_gradient_coef_x"/>
 			<var name="cell_gradient_coef_y"/>
 #endif
-			<var name="deriv_two"/>
-			<var name="defc_a"/>
-			<var name="defc_b"/>
-			<var name="deformation_coef_c2"/>
-			<var name="deformation_coef_s2"/>
-			<var name="deformation_coef_cs"/>
-			<var name="deformation_coef_c"/>
-			<var name="deformation_coef_s"/>
-			<var name="coeffs_reconstruct"/>
-			<var name="east"/>
-			<var name="north"/>
 			<var_array name="scalars"/>
 			<var name="initial_time"/>
 			<var name="xtime"/>
