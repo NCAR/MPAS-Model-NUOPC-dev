@@ -685,6 +685,22 @@ CPPINCLUDES =
 FCINCLUDES =
 LIBS =
 
+export MPAS_ESMF ?= embedded
+ifeq "$(MPAS_ESMF)" "external"
+  ifeq ($(wildcard $(ESMFMKFILE)), )
+    $(error ESMFMKFILE must be set if ESMF=external)
+  endif
+  include $(ESMFMKFILE)
+  export MPAS_ESMF_INC = $(ESMF_F90COMPILEPATHS)
+  export MPAS_ESMF_LIB = $(ESMF_F90LINKPATHS) $(ESMF_F90ESMFLINKPATHS) $(ESMF_F90ESMFLINKLIBS)
+  override CPPFLAGS += -DMPAS_EXTERNAL_ESMF_LIB=true
+else ifeq "$(MPAS_ESMF)" "embedded"
+  export MPAS_ESMF_INC = -I$(PWD)/src/external/esmf_time_f90
+  export MPAS_ESMF_LIB = -L$(PWD)/src/external/esmf_time_f90 -lesmf_time
+else
+  $(error Invalid MPAS_ESMF option: $(MPAS_ESMF) - valid options "embedded", "external")
+endif
+
 ifneq "$(PIO)" ""
 #
 # Regardless of PIO library version, look for a lib subdirectory of PIO path
