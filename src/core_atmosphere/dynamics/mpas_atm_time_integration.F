@@ -23,7 +23,7 @@ module atm_time_integration
    use mpas_vector_reconstruction
    ! Added only clause to keep xlf90 from getting confused from the overloaded abs intrinsic in mpas_timekeeping
    use mpas_derived_types, only : MPAS_Time_type, MPAS_TimeInterval_type, MPAS_NOW
-   use mpas_timekeeping, only: mpas_get_clock_time, mpas_set_time, mpas_set_timeInterval, mpas_get_time, operator(+)
+   use mpas_timekeeping, only: mpas_set_time, mpas_set_timeInterval, mpas_get_time, operator(+)
    use mpas_timer
 
 #ifdef DO_PHYSICS
@@ -5287,11 +5287,6 @@ module atm_time_integration
       logical, parameter :: perturbation_coriolis = .true.
       real (kind=RKIND) :: reference_u
 
-      type (MPAS_Time_Type) :: currTime
-      integer :: H, M, S, S_n, S_d
-      integer :: ierr
-      real(kind=RKIND) :: time_of_day_seconds
-
       flux4(q_im2, q_im1, q_i, q_ip1, ua) =                     &
                 ua*( 7.*(q_i + q_im1) - (q_ip1 + q_im2) )/12.0
 
@@ -5410,11 +5405,6 @@ module atm_time_integration
 
             call calculate_n2( bn2, theta_m, exner, pressure_b, pp, zgrid, scalars, index_qv, index_qc, qtot, &
                                cellStart, cellEnd, nCells)
-
-            currTime = mpas_get_clock_time(clock, MPAS_NOW, ierr)
-            call mpas_get_time(curr_time=currTime, H=H, M=M, S=S, S_n=S_n, S_d=S_d)
-            time_of_day_seconds = real(H)*3600. + real(M)*60. + real(S) + real(S_n)/real(S_d) + 0.5*dt
-            ! call mpas_log_write(' les integration, timestep midpoint time of day in seconds, $r ', realArgs=(/time_of_day_seconds/))
       
             call les_models( config_les_model, config_les_surface, dynamics_substep, eddy_visc_horz, eddy_visc_vert,                  &
                              u, v, ur_cell, vr_cell,                                            &
@@ -5938,7 +5928,7 @@ module atm_time_integration
                                          eddy_visc_horz, eddy_visc_vert,                           &
                                          bn2, config_len_disp, scalars, tend_scalars,              &
                                          index_tke, index_qv, num_scalars, config_mix_scalars,     &
-                                         config_les_model, config_les_surface, time_of_day_seconds,&
+                                         config_les_model, config_les_surface, clock, dt,          &
                                          config_surface_heat_flux, config_surface_moisture_flux,   &
                                          ur_cell, vr_cell,                                         &
                                          hfx, qfx,                                                 &

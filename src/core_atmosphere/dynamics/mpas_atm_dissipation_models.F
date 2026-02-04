@@ -14,7 +14,8 @@ module mpas_atm_dissipation_models
    use mpas_atmphys_constants
    use mpas_constants
    use mpas_log
-   use mpas_derived_types, only : MPAS_LOG_CRIT
+   use mpas_timekeeping, only : mpas_get_clock_time, mpas_get_time
+   use mpas_derived_types, only : MPAS_Clock_type, MPAS_Time_type, MPAS_NOW, MPAS_LOG_CRIT
 
    logical, parameter :: les_test = .true., les_sas_test = .false.
    !! real (kind=RKIND), parameter :: tke_heat_flux = 0.03  ! shear case from Moeng et al., first hour
@@ -1069,7 +1070,7 @@ contains
                                          eddy_visc_horz, eddy_visc_vert,                           &
                                          bv_freq2, config_len_disp, scalars, tend_scalars,         &
                                          index_tke, index_qv, num_scalars_dummy, mix_scalars,      &
-                                         config_les_model, config_les_surface, time_of_day_seconds,&
+                                         config_les_model, config_les_surface, clock, dt,          &
                                          config_surface_heat_flux, config_surface_moisture_flux,   &
                                          uReconstructZonal, uReconstructMeridional,                &
                                          hfx, qfx,                                                 &
@@ -1090,7 +1091,6 @@ contains
       integer, intent(in) :: index_tke, index_qv
       integer, intent(in) :: dynamics_substep
 
-      real (kind=RKIND), intent(in) :: time_of_day_seconds
       real (kind=RKIND), intent(in) :: config_surface_heat_flux
       real (kind=RKIND), intent(in) :: config_surface_moisture_flux
 
@@ -1098,6 +1098,9 @@ contains
 
       character (len=StrKIND) :: config_les_model
       character (len=StrKIND) :: config_les_surface
+
+      type (MPAS_Clock_type), intent(in) :: clock
+      real (kind=RKIND), intent(in) :: dt
 
       integer, dimension(nCells+1), intent(in) :: nEdgesOnCell
       integer, dimension(maxEdges,nCells+1), intent(in) :: EdgesOnCell
@@ -1428,7 +1431,7 @@ contains
                   heat_flux = config_surface_heat_flux
 
 !                 place holder routine for time-varying specified
-!                 call flux_les_sas( heat_flux, moisture_flux, time_of_day_seconds )
+!                 call flux_les_sas( heat_flux, moisture_flux, clock, dt )
 
                else if ( config_les_surface == "varying" ) then
                   heat_flux = hfx(iCell)/rho_zz(1,iCell)/cp
@@ -1508,18 +1511,28 @@ contains
 
 !-----------
 
-!  subroutine flux_les_sas(heat_flux, moisture_flux, time_of_day_seconds)
+!  subroutine flux_les_sas(heat_flux, moisture_flux, clock, dt)
 
 !     implicit none
 
-!     real (kind=RKIND), intent(in) :: time_of_day_seconds
 !     real (kind=RKIND), intent(out) :: heat_flux, moisture_flux
+!     type (MPAS_Clock_type), intent(in) :: clock
+!     real (kind=RKIND), intent(in) :: dt
 
 !     real (kind=RKIND), parameter:: t_start_t_flux = 3600.*6.0
 !     real (kind=RKIND), parameter:: t_end_t_flux = 3600.*19.50
 !     real (kind=RKIND), parameter:: t_start_q_flux = 3600.*7.0
 !     real (kind=RKIND), parameter:: t_end_q_flux = 3600.*19.50
 !     real (kind=RKIND) :: rel_time_t_flux, rel_time_q_flux
+!     real (kind=RKIND) :: time_of_day_seconds
+!     type (MPAS_Time_type) :: currTime
+!     integer :: H, M, S, S_n, S_d
+!     integer :: ierr
+
+!     currTime = mpas_get_clock_time(clock, MPAS_NOW, ierr)
+!     call mpas_get_time(curr_time=currTime, H=H, M=M, S=S, S_n=S_n, S_d=S_d)
+!     time_of_day_seconds = real(H)*3600. + real(M)*60. + real(S) + real(S_n)/real(S_d) + 0.5*dt
+!     call mpas_log_write(' les integration, timestep midpoint time of day in seconds, $r ', realArgs=(/time_of_day_seconds/))
 
 !     rel_time_t_flux = max(0.,(time_of_day_seconds - t_start_t_flux)/(t_end_t_flux - t_start_t_flux))
 !     rel_time_q_flux = max(0.,(time_of_day_seconds - t_start_q_flux)/(t_end_q_flux - t_start_q_flux))
