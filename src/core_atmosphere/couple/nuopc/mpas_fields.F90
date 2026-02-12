@@ -31,7 +31,6 @@ module mpas_nuopc_fields
   logical, parameter :: EXPORT_T = .true.
   logical, parameter :: EXPORT_F = .false.
   logical, parameter :: TMP_EXPORT_T = .false.
-  logical, parameter :: TMP_EXPORT_TT = .false.
   logical, parameter :: TMP_IMPORT_T = .false.
   logical, parameter :: TMP_IMPORT_Q = .true.
 
@@ -126,7 +125,7 @@ contains
       add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
         IMPORT_T, EXPORT_F, 0.00d0), &
       add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
-        IMPORT_T, EXPORT_F, 0.00d0) &
+        IMPORT_F, EXPORT_F, 0.00d0) &
         ]
 
     ! add NoahMP Variables that MPAS provides
@@ -484,15 +483,16 @@ contains
     end if
   end subroutine check_var
 
-  function field_create(rt_domain, fld_name, mesh, did, &
+  function field_create(domain, fld_name, mesh, did, &
        nSoilLevels, rc) &
        result(field)
-    use mpas_derived_types, only: domain_type
+    use mpas_kind_types, only: rkind
+    use mpas_derived_types, only: domain_type, block_type, mpas_pool_type
     use mpas_atmphys_vars, only: mpas_noahmp, smois_p
-    use mpas_pool_routines, only: mpas_pool_get_array
+    use mpas_pool_routines, only: mpas_pool_get_array, mpas_pool_get_subpool
     ! arguments
-    type(domain_type), intent(in) :: rt_domain
-    ! type (domain_type), intent(in) :: rt_domain(:)
+    type(domain_type), intent(in) :: domain
+    ! type (domain_type), intent(in) :: domain(:)
     character(*), intent(in) :: fld_name
     type(ESMF_Mesh), intent(in) :: mesh
     integer, intent(in) :: did
@@ -505,10 +505,17 @@ contains
     character(len=16)       :: cmemflg
     character(:), allocatable :: file
     real(ESMF_KIND_R8), allocatable, target :: test_array(:,:)
+    type(block_type),pointer:: block
+    type(mpas_pool_type), pointer :: sfc_input, diag_physics
+    real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
+    real(kind=RKIND),dimension(:),pointer:: sfcrunoff
+    real(kind=RKIND), allocatable, target ::  &
+         smois_sfc1(:), smois_sfc2(:), smois_sfc3(:), smois_sfc4(:)
+    integer :: i, n
 
     file = __FILE__
     rc = ESMF_SUCCESS
-
+    i = 0
     ! allocate(test_array(4, 40962))
     ! test_array(1,:) = 1
     ! test_array(2,:) = 2
@@ -519,13 +526,13 @@ contains
     ! print *, "allocated mpas_noahmp sfcrunoff =", allocated(mpas_noahmp%sfcrunoff)
     ! print *, "shape mpas_noahmp sfcrunoff =", shape(mpas_noahmp%sfcrunoff)
 
-
+    ! error stop "CALLING FIELD CREATE, HOPE THIS IS SECOND!!"
 
     ! if (memflg .eq. MEMORY_POINTER) then
       select case (trim(fld_name))
       case ('smc') ! soil moisture
          ! field = ESMF_FieldCreate(name=fld_name, grid=grid, &
-         !    farray=rt_domain%smois(:,:,:), gridToFieldMap=(/1,2/), &
+         !    farray=domain%smois(:,:,:), gridToFieldMap=(/1,2/), &
          !   ungriddedLBound=(/1/), ungriddedUBound=(/nlst(did)%nsoil/), &
          !   indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          print *, "shape mpas_noahmp smc|smois =", shape(mpas_noahmp%smois)
@@ -559,55 +566,175 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox1')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
+
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o_import(:,1), &
+              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 1), &
+              ! farray=sh2o(1, mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=mpas_noahmp%sh2o_import(:,1), &
+              farray=mpas_noahmp%sh2o(:,1), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox2')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o_import(:,2), &
+              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 2), &
+              ! farray=sh2o(2, mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=mpas_noahmp%sh2o_import(:,2), &
+              farray=mpas_noahmp%sh2o(:,2), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox3')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o_import(:,3), &
+              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 3), &
+              ! farray=sh2o(3, mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=mpas_noahmp%sh2o_import(:,3), &
+              farray=mpas_noahmp%sh2o(:,3), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox4')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sh2o_import(:,4), &
+              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 4), &
+              ! farray=sh2o(4, mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=mpas_noahmp%sh2o_import(:,4), &
+              farray=mpas_noahmp%sh2o(:,4), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc1')
+         ! should attach this
+         ! in physics_driver
+         !  ! type(domain_type),intent(inout):: domain
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input'          ,sfc_input          )
+         !    call mpas_pool_get_array(sfc_input,'smois'   ,smois   )
+         !    n = size(smois,2)
+         !    allocate(smois_sfc1(n))
+         !    smois_sfc1(:) = smois(1, 1:n)   ! contiguous copy
+         !    ! print *, "shape(smois) =", shape(smois)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
+
+         ! print *, "noahmp", lbound(mpas_noahmp%smois(:,1)), &
+         !      ubound(mpas_noahmp%smois(:,1))
+         ! print *, "block", lbound(smois_sfc1), ubound(smois_sfc1)
+         ! print *, "smois", lbound(smois), ubound(smois)
+         ! print *, "its, ite =", mpas_noahmp%its, mpas_noahmp%ite
+         ! ! stop "hi"
+
+         ! get's passed to driver_lsm_noahmp as sfc_input
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               ! farray=mpas_noahmp%smois_import(:,1), &
               farray=mpas_noahmp%smois(:,1), &
+              ! farray=smois(1,mpas_noahmp%its:mpas_noahmp%ite), & ! bounds not working we thin
+
+              ! farray=smois(1, mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=smois_sfc1(mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 1), & ! WORKS
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
+         ! stop "investigating"
       case ('smc2')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input'          ,sfc_input          )
+         !    call mpas_pool_get_array(sfc_input,'smois'   ,smois   )
+         !    n = size(smois,2)
+         !    allocate(smois_sfc2(n))
+         !    smois_sfc2(:) = smois(2, 1:n)   ! contiguous copy
+         !    ! print *, "shape(smois) =", shape(smois)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
+
+
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%smois_import(:,2), &
+              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 2), &
               farray=mpas_noahmp%smois(:,2), &
+              ! farray=smois_sfc2(mpas_noahmp%its:mpas_noahmp%ite), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc3')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input'          ,sfc_input          )
+         !    call mpas_pool_get_array(sfc_input,'smois'   ,smois   )
+         !    n = size(smois,2)
+         !    allocate(smois_sfc3(n))
+         !    smois_sfc3(:) = smois(3, 1:n)   ! contiguous copy
+         !    ! print *, "shape(smois) =", shape(smois)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               ! farray=mpas_noahmp%smois_import(:,3), &
+              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 3), &
+              ! farray=smois(3, mpas_noahmp%its:mpas_noahmp%ite), &
               farray=mpas_noahmp%smois(:,3), &
+              ! farray=smois_sfc3(mpas_noahmp%its:mpas_noahmp%ite), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc4')
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'sfc_input'          ,sfc_input          )
+         !    call mpas_pool_get_array(sfc_input,'smois'   ,smois   )
+         !    n = size(smois,2)
+         !    allocate(smois_sfc4(n))
+         !    smois_sfc4(:) = smois(4, 1:n)   ! contiguous copy
+         !    ! print *, "shape(smois) =", shape(smois)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               ! farray=mpas_noahmp%smois_import(:,4), &
+              ! farray=smois(4, mpas_noahmp%its:mpas_noahmp%ite), &
+              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 4), &
               farray=mpas_noahmp%smois(:,4), &
+              ! farray=smois_sfc4(mpas_noahmp%its:mpas_noahmp%ite), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smcmax1')
@@ -670,9 +797,23 @@ contains
          print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff_import)
          print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff_import)
 
+         ! block => domain % blocklist
+         ! do while(associated(block))
+         !    if (i > 0) error stop "not sure how to handle this"
+         !    call mpas_pool_get_subpool(block%structs,'diag_physics', diag_physics)
+         !    call mpas_pool_get_array(diag_physics,'sfcrunoff', sfcrunoff )
+         !    n = size(sfcrunoff)
+         !    i = i + 1
+         !    block => block % next
+         ! end do
+
+         ! print *, "sfcrunoff its:ite", mpas_noahmp%its, mpas_noahmp%ite
+         ! stop "hi"
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sfcrunoff_import(:), &
+              farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
+              ! farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
+              ! farray=sfcrunoff(mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('udrunoff')
@@ -713,6 +854,7 @@ contains
     ! endif
 
   end function field_create
+
 
 
 

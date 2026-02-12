@@ -1081,36 +1081,37 @@
  call lsm_noahmp_fromMPAS(configs,mesh,diag,diag_physics,diag_physics_noahmp,output_noahmp,sfc_input, &
                           state,time_lev,itimestep)
 
- ! its   = mpas_noahmp%its
- ! ite   = mpas_noahmp%ite
 
- ! debug
- ! print *, "noahmp its ite",  mpas_noahmp%its, mpas_noahmp%ite
- ! print *, its, ite, ":: 1 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
  do i = mpas_noahmp%its,mpas_noahmp%ite
     mpas_noahmp%sfcrunoff(i) = mpas_noahmp%sfcrunoff_import(i)
     mpas_noahmp%smois(i,1) = mpas_noahmp%smois_import(i,1)
     mpas_noahmp%smois(i,2) = mpas_noahmp%smois_import(i,2)
     mpas_noahmp%smois(i,3) = mpas_noahmp%smois_import(i,3)
     mpas_noahmp%smois(i,4) = mpas_noahmp%smois_import(i,4)
+    mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
+    mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
+    mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
+    mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
  end do
-
-
- do ns = 1, mpas_noahmp%nsoil
-    do i = mpas_noahmp%its,mpas_noahmp%ite
-       ! mpas_noahmp%smois(i,ns) = mpas_noahmp%smois_import(i,1)
-       ! mpas_noahmp%smois(i,ns)   = smois(ns,i)
-       ! mpas_noahmp%sh2o(i,ns)    = sh2o(ns,i)
-       ! mpas_noahmp%tslb(i,ns)    = tslb(ns,i)
-    enddo
- enddo
-
 
  ! print *, its, ite, ":: 2 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
 
  call NoahmpDriverMain(mpas_noahmp)
  ! print *, its, ite, ":: 3 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
+
+ do i = mpas_noahmp%its,mpas_noahmp%ite
+    mpas_noahmp%sfcrunoff_import(i) = mpas_noahmp%sfcrunoff(i)
+    mpas_noahmp%smois_import(i,1) = mpas_noahmp%smois(i,1)
+    mpas_noahmp%smois_import(i,2) = mpas_noahmp%smois(i,2)
+    mpas_noahmp%smois_import(i,3) = mpas_noahmp%smois(i,3)
+    mpas_noahmp%smois_import(i,4) = mpas_noahmp%smois(i,4)
+    mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
+    mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
+    mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
+    mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
+ end do
+
 
 
  ! old debug
