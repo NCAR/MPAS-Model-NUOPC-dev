@@ -64,7 +64,7 @@ contains
     type(ESMF_VM)       :: vm
     integer, allocatable :: gindex(:)
     character(len=256) :: iomsg, mpas_graph_file
-    integer :: unit, iostat, irank, localCount
+    integer :: unit, iostat, irank, localCount, ierr, tmp
     integer :: rank, np
     integer :: idx, inode
 
@@ -80,45 +80,61 @@ contains
     ! read
     if (np == 1) then
        mpas_graph_file = 'frontrange.graph.info'
+       print *, "MPAS: mpas_graph_file =", mpas_graph_file
+       open(newunit=unit, file=mpas_graph_file, status="old", &
+            action="read", iostat=ierr)
+       if (ierr /= 0) error stop "Failed to open frontrange.graph.info"
+
+       read(unit, *, iostat=ierr) localCount, tmp   ! reads: first_int second_int
+       if (ierr /= 0) error stop &
+            "Failed to read first line of frontrange.graph.info"
+       close(unit)
+
     else
        write(mpas_graph_file, '(A,I0)') 'frontrange.graph.info.part.', np
-    end if
-    print *, "MPAS: mpas_graph_file =", mpas_graph_file
-    open(newunit=unit, file=mpas_graph_file, &
-         status='old', action='read', iostat=iostat, iomsg=iomsg)
-    if (iostat /= 0) then
-       print *, trim(iomsg)
-       stop "Error opening [casename].graph.info.part.[np]"
-    end if
+       print *, "MPAS: mpas_graph_file =", mpas_graph_file
 
-    localCount = 0
-    do
-       read(unit, *, iostat=iostat) irank
-       if (iostat /= 0) exit
-       if (irank == rank) localCount = localCount + 1
-    end do
+       open(newunit=unit, file=mpas_graph_file, &
+            status='old', action='read', iostat=iostat, iomsg=iomsg)
+       if (iostat /= 0) then
+          print *, trim(iomsg)
+          stop "Error opening [casename].graph.info.part.[np]"
+       end if
+       localCount = 0
+       do
+          read(unit, *, iostat=iostat) irank
+          if (iostat /= 0) exit
+          if (irank == rank) localCount = localCount + 1
+       end do
+    end if
 
     allocate(gindex(localCount))
 
     print *, rank, "/", np, ": with localCount =", localCount
 
     ! setup grid distribution
-    rewind(unit)
-    idx   = 0
-    inode = 0
+    if (np == 1) then
+       inode = 1
+       do inode = 1, localCount
+          gindex(inode) = inode
+       end do
+    else
+       rewind(unit)
+       idx   = 0
+       inode = 0
 
-    do
-       read(unit, *, iostat=iostat) irank
-       if (iostat /= 0) exit
+       do
+          read(unit, *, iostat=iostat) irank
+          if (iostat /= 0) exit
 
-       inode = inode + 1 ! inode = line number
-       if (irank == rank) then
-          idx = idx + 1
-          gindex(idx) = inode ! seqIndex = global node id
-       end if
-    end do
+          inode = inode + 1 ! inode = line number
+          if (irank == rank) then
+             idx = idx + 1
+             gindex(idx) = inode ! seqIndex = global node id
+          end if
+       end do
+    end if
     close(unit)
-
 
     distgrid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
     if (check(rc, __LINE__, file)) return
