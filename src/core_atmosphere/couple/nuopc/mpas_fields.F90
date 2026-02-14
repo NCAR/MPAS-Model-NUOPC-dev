@@ -123,7 +123,7 @@ contains
       add_field("soil_column_drainage","soldrain", "mm", &
         IMPORT_T, EXPORT_T, 0.00d0), &
       add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
-        IMPORT_T, EXPORT_F, 0.00d0), &
+        IMPORT_F, EXPORT_F, 0.00d0), &
       add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
         IMPORT_F, EXPORT_F, 0.00d0) &
         ]
@@ -774,9 +774,11 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sfchead')
+         if (.not. allocated(mpas_noahmp%sfcheadrt_import)) &
+              stop "not allocated sfcheadrt_import"
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sfcheadrt(:), &
+              farray=mpas_noahmp%sfcheadrt_import(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('infxsrt')

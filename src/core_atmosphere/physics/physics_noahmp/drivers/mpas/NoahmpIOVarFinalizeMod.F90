@@ -456,6 +456,7 @@ contains
 #ifdef WRF_HYDRO
     if ( allocated (NoahmpIO%infxsrt)   ) deallocate ( NoahmpIO%infxsrt             )
     if ( allocated (NoahmpIO%sfcheadrt) ) deallocate ( NoahmpIO%sfcheadrt           )
+    if ( allocated (NoahmpIO%sfcheadrt_import) ) deallocate ( NoahmpIO%sfcheadrt_import )
     if ( allocated (NoahmpIO%soldrain)  ) deallocate ( NoahmpIO%soldrain            )
     if ( allocated (NoahmpIO%qtiledrain)) deallocate ( NoahmpIO%qtiledrain          )
     if ( allocated (NoahmpIO%zwatble2d) ) deallocate ( NoahmpIO%zwatble2d           )

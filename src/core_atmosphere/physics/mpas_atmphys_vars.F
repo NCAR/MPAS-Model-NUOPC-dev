@@ -806,6 +806,7 @@
     qz0_p,            &!specific humidity at znt                                                         [kg kg-1]
     rainbl_p,         &!
     sfcrunoff_p,      &!surface runoff                                                                     [m s-1]
+    sfcheadrt_p,      &!surface water head                                                                 [m s-1]
     shdmin_p,         &!minimum areal fractional coverage of annual green vegetation                           [-]
     shdmax_p,         &!maximum areal fractional coverage of annual green vegetation                           [-]
     smstav_p,         &!moisture availability                                                                  [-]

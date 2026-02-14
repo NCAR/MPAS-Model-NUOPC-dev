@@ -463,6 +463,8 @@ contains
 #ifdef WRF_HYDRO
     if ( .not. allocated (NoahmpIO%infxsrt)   ) allocate ( NoahmpIO%infxsrt    (its:ite) )
     if ( .not. allocated (NoahmpIO%sfcheadrt) ) allocate ( NoahmpIO%sfcheadrt  (its:ite) )
+    if ( .not. allocated (NoahmpIO%sfcheadrt_import) ) &
+         allocate ( NoahmpIO%sfcheadrt_import (its:ite) )
     if ( .not. allocated (NoahmpIO%soldrain)  ) allocate ( NoahmpIO%soldrain   (its:ite) )
     if ( .not. allocated (NoahmpIO%qtiledrain)) allocate ( NoahmpIO%qtiledrain (its:ite) )
     if ( .not. allocated (NoahmpIO%zwatble2d) ) allocate ( NoahmpIO%zwatble2d  (its:ite) )
@@ -618,6 +620,8 @@ contains
     NoahmpIO%mp_hail         = 0.0
     NoahmpIO%sfcrunoff       = 0.0
     NoahmpIO%sfcrunoff_import= 0.0
+    NoahmpIO%sfcheadrt       = 0.0
+    NoahmpIO%sfcheadrt_import= 0.0
     NoahmpIO%udrunoff        = 0.0
 
     ! additional output
@@ -851,6 +855,7 @@ contains
 #ifdef WRF_HYDRO
     NoahmpIO%infxsrt         = 0.0
     NoahmpIO%sfcheadrt       = 0.0
+    NoahmpIO%sfcheadrt_import = 0.0
     NoahmpIO%soldrain        = 0.0
     NoahmpIO%qtiledrain      = 0.0
     NoahmpIO%zwatble2d       = 0.0

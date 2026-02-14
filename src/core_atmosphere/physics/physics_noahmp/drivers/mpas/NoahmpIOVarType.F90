@@ -106,6 +106,7 @@ module NoahmpIOVarType
 #ifdef WRF_HYDRO
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   infxsrt            ! surface infiltration
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   sfcheadrt          ! surface water head
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::   sfcheadrt_import   ! surface water head
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   soldrain           ! soil drainage
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   qtiledrain         ! tile drainage
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   zwatble2d          ! water table depth

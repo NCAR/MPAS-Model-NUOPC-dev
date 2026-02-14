@@ -72,7 +72,8 @@
                                          sfcrunoff,skintemp,smstav,smstot,udrunoff,snow,snowc,snowh,lai,z0, &
                                          znt
  real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
-
+!--- Hydro Variables
+ real(kind=RKIND),dimension(:),pointer:: sfcheadrt
 
 !--- local INOUT pointers (with no Noah LSM equivalent as defined in WRF):
  integer,dimension(:),pointer:: isnowxy
@@ -251,6 +252,8 @@
  call mpas_pool_get_array(diag_physics,'lai'       ,lai       )
  call mpas_pool_get_array(diag_physics,'z0'        ,z0        )
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
+ ! Hydro
+ call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt)
 
 
  do i = its,ite
@@ -261,6 +264,7 @@
     mpas_noahmp%grdflx(i)    = grdflx(i)
     mpas_noahmp%smstav(i)    = smstav(i)
     mpas_noahmp%smstot(i)    = smstot(i)
+    if (.not. associated(sfcrunoff)) stop "mpas sfcrunoff not associated"
     mpas_noahmp%sfcrunoff(i) = sfcrunoff(i)
     mpas_noahmp%udrunoff(i)  = udrunoff(i)
     mpas_noahmp%albedo(i)    = sfc_albedo(i)
@@ -275,6 +279,10 @@
     mpas_noahmp%lai(i)       = lai(i)
     mpas_noahmp%z0(i)        = z0(i)
     mpas_noahmp%znt(i)       = znt(i)
+    ! Hydro
+    if (.not. allocated(mpas_noahmp%sfcheadrt)) stop "noahmp sfcheadrt not allocated"
+    if (.not. associated(sfcheadrt)) stop "mpas sfcheadrt not associated"
+    mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
  enddo
 
  do ns = 1,nsoil
@@ -665,7 +673,8 @@
                                          sfcrunoff,skintemp,smstav,smstot,udrunoff,snow,snowc,snowh,lai,z0, &
                                          znt
  real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
-
+!--- Hydro
+ real(kind=RKIND),dimension(:),pointer:: sfcheadrt
 
  !--- local INOUT pointers (with no Noah LSM equivalent as defined in WRF):
  integer,dimension(:),pointer:: isnowxy
@@ -732,7 +741,8 @@
  call mpas_pool_get_array(diag_physics,'lai'       ,lai       )
  call mpas_pool_get_array(diag_physics,'z0'        ,z0        )
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
-
+! Hydro
+ call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt )
 
  do i = its,ite
     skintemp(i)   = mpas_noahmp%tsk(i)
@@ -756,6 +766,8 @@
     lai(i)        = mpas_noahmp%lai(i)
     z0(i)         = mpas_noahmp%z0(i)
     znt(i)        = mpas_noahmp%znt(i)
+! Hydro
+    sfcheadrt(i)  = mpas_noahmp%sfcheadrt(i)
  enddo
 
  do ns = 1,nsoil
@@ -1081,17 +1093,28 @@
  call lsm_noahmp_fromMPAS(configs,mesh,diag,diag_physics,diag_physics_noahmp,output_noahmp,sfc_input, &
                           state,time_lev,itimestep)
 
+! #1  0x430e83 in __mpas_atmphys_driver_MOD_physics_driver
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/physics/mpas_atmphys_driver.F:296
+! #2  0x41e179 in __atm_core_MOD_atm_do_timestep
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:1099
+! #3  0x41effe in __atm_core_MOD_atm_core_run_advance
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:826
+! #4  0x414383 in advance
+!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/couple/nuopc/mpas_atm_nuopc.F90:565
 
+
+ ! error stop "hi"
  do i = mpas_noahmp%its,mpas_noahmp%ite
-    mpas_noahmp%sfcrunoff(i) = mpas_noahmp%sfcrunoff_import(i)
-    mpas_noahmp%smois(i,1) = mpas_noahmp%smois_import(i,1)
-    mpas_noahmp%smois(i,2) = mpas_noahmp%smois_import(i,2)
-    mpas_noahmp%smois(i,3) = mpas_noahmp%smois_import(i,3)
-    mpas_noahmp%smois(i,4) = mpas_noahmp%smois_import(i,4)
-    mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
-    mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
-    mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
-    mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
+    mpas_noahmp%sfcheadrt(i) = mpas_noahmp%sfcheadrt_import(i)
+    ! mpas_noahmp%sfcrunoff(i) = mpas_noahmp%sfcrunoff_import(i)
+    ! mpas_noahmp%smois(i,1) = mpas_noahmp%smois_import(i,1)
+    ! mpas_noahmp%smois(i,2) = mpas_noahmp%smois_import(i,2)
+    ! mpas_noahmp%smois(i,3) = mpas_noahmp%smois_import(i,3)
+    ! mpas_noahmp%smois(i,4) = mpas_noahmp%smois_import(i,4)
+    ! mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
+    ! mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
+    ! mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
+    ! mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
  end do
 
  ! print *, its, ite, ":: 2 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
@@ -1101,15 +1124,19 @@
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
 
  do i = mpas_noahmp%its,mpas_noahmp%ite
-    mpas_noahmp%sfcrunoff_import(i) = mpas_noahmp%sfcrunoff(i)
-    mpas_noahmp%smois_import(i,1) = mpas_noahmp%smois(i,1)
-    mpas_noahmp%smois_import(i,2) = mpas_noahmp%smois(i,2)
-    mpas_noahmp%smois_import(i,3) = mpas_noahmp%smois(i,3)
-    mpas_noahmp%smois_import(i,4) = mpas_noahmp%smois(i,4)
-    mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
-    mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
-    mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
-    mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
+    ! FIX THIS, FIND RIGHT VARIABLE
+    ! surface_head_rt
+    !
+    mpas_noahmp%sfcheadrt_import(i) = mpas_noahmp%sfcrunoff(i)
+    ! mpas_noahmp%sfcrunoff_import(i) = mpas_noahmp%sfcrunoff(i)
+    ! mpas_noahmp%smois_import(i,1) = mpas_noahmp%smois(i,1)
+    ! mpas_noahmp%smois_import(i,2) = mpas_noahmp%smois(i,2)
+    ! mpas_noahmp%smois_import(i,3) = mpas_noahmp%smois(i,3)
+    ! mpas_noahmp%smois_import(i,4) = mpas_noahmp%smois(i,4)
+    ! mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
+    ! mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
+    ! mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
+    ! mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
  end do
 
 
