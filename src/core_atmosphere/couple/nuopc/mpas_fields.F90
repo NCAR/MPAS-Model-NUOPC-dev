@@ -83,11 +83,11 @@ contains
     type(logical), intent(in), optional :: mpas
     field_list = [ &
       add_field("inst_total_soil_moisture_content","smc", "m3 m-3", &
-        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
+        IMPORT_F, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_moisture_content","slc", "m3 m-3", &
-        TMP_IMPORT_T, TMP_EXPORT_T, 0.20d0), &
+        IMPORT_F, TMP_EXPORT_T, 0.20d0), &
       add_field("inst_soil_temperature","stc", "K", &
-        TMP_IMPORT_T, EXPORT_F, 288.d0), &
+        IMPORT_F, EXPORT_F, 288.d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_1","sh2ox1", "m3 m-3", &
         IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("liquid_fraction_of_soil_moisture_layer_2","sh2ox2", "m3 m-3", &
@@ -105,23 +105,23 @@ contains
       add_field("soil_moisture_fraction_layer_4","smc4", "m3 m-3", &
         IMPORT_T, EXPORT_T, 0.20d0), &
       add_field("soil_temperature_layer_1","stc1", "K", &
-        IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_F, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_2","stc2", "K", &
-        IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_F, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_3","stc3", "K", &
-        IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_F, EXPORT_T, 288.d0), &
       add_field("soil_temperature_layer_4","stc4", "K", &
-        IMPORT_T, EXPORT_T, 288.d0), &
+        IMPORT_F, EXPORT_T, 288.d0), &
       add_field("soil_porosity","smcmax1", "1", &
         IMPORT_F, EXPORT_F, 0.45d0), &
       add_field("vegetation_type","vegtyp", "1", &
-        IMPORT_F, EXPORT_F, 16.0d0), &
+        IMPORT_F, EXPORT_T, 16.0d0), &
       add_field("surface_water_depth","sfchead", "mm", &
         IMPORT_T, EXPORT_F, 0.00d0), &
       add_field("time_step_infiltration_excess","infxsrt", "mm", &
-        IMPORT_T, EXPORT_T, 0.00d0), &
+        IMPORT_F, EXPORT_T, 0.00d0), &
       add_field("soil_column_drainage","soldrain", "mm", &
-        IMPORT_T, EXPORT_T, 0.00d0), &
+        IMPORT_F, EXPORT_T, 0.00d0), &
       add_field("surface_runoff_accumulated","sfcrunoff", "mm", &
         IMPORT_F, EXPORT_F, 0.00d0), &
       add_field("subsurface_runoff_accumulated","udrunoff", "mm", &
@@ -508,7 +508,7 @@ contains
     type(block_type),pointer:: block
     type(mpas_pool_type), pointer :: sfc_input, diag_physics
     real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
-    real(kind=RKIND),dimension(:),pointer:: sfcrunoff
+    real(kind=RKIND),dimension(:),pointer:: sfcheadrt
     real(kind=RKIND), allocatable, target ::  &
          smois_sfc1(:), smois_sfc2(:), smois_sfc3(:), smois_sfc4(:)
     integer :: i, n
@@ -776,11 +776,19 @@ contains
       case ('sfchead')
          if (.not. allocated(mpas_noahmp%sfcheadrt_import)) &
               stop "not allocated sfcheadrt_import"
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'diag_physics', diag_physics)
+         call mpas_pool_get_array(diag_physics,'sfcheadrt', sfcheadrt )
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sfcheadrt_import(:), &
+              farray=sfcheadrt(mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=mpas_noahmp%sfcheadrt_import(:), &
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
       case ('infxsrt')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
@@ -796,8 +804,9 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sfcrunoff')
-         print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff_import)
-         print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff_import)
+         stop "shouldn't be here"
+         ! print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff_import)
+         ! print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff_import)
 
          ! block => domain % blocklist
          ! do while(associated(block))
@@ -811,12 +820,12 @@ contains
 
          ! print *, "sfcrunoff its:ite", mpas_noahmp%its, mpas_noahmp%ite
          ! stop "hi"
-         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
-              meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
-              ! farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
-              ! farray=sfcrunoff(mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
-              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
+         !      ! farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
+         !      ! farray=sfcrunoff(mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('udrunoff')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
