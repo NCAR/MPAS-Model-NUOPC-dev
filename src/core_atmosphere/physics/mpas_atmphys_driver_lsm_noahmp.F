@@ -254,7 +254,9 @@
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
  ! Hydro
  call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt)
-
+ ! sfcheadrt is all 0s the first time
+ ! print *, "mpas mesh sfcrunoff", sfcheadrt
+ ! stop "investigating"
 
  do i = its,ite
     mpas_noahmp%tsk(i)       = skintemp(i)
@@ -264,7 +266,6 @@
     mpas_noahmp%grdflx(i)    = grdflx(i)
     mpas_noahmp%smstav(i)    = smstav(i)
     mpas_noahmp%smstot(i)    = smstot(i)
-    if (.not. associated(sfcrunoff)) stop "mpas sfcrunoff not associated"
     mpas_noahmp%sfcrunoff(i) = sfcrunoff(i)
     mpas_noahmp%udrunoff(i)  = udrunoff(i)
     mpas_noahmp%albedo(i)    = sfc_albedo(i)
@@ -282,9 +283,11 @@
     ! Hydro
     if (.not. allocated(mpas_noahmp%sfcheadrt)) stop "noahmp sfcheadrt not allocated"
     if (.not. associated(sfcheadrt)) stop "mpas sfcheadrt not associated"
-    mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
+    ! mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
  enddo
 
+ ! print *, "smois ============", smois(1:2, 1:10)
+ ! stop "==="
  do ns = 1,nsoil
     do i = its,ite
        mpas_noahmp%sh2o(i,ns)    = sh2o(ns,i)
@@ -712,7 +715,7 @@
  nsoil = mpas_noahmp%nsoil
  nsnow = mpas_noahmp%nsnow
  nzsnow = nsnow + nsoil
-
+ print *, "mpash its ite", its, ite
 
 !--- update of INOUT variables (with generic LSM equivalent as defined in WRF), i.e. see
 !    lines 162-184 in module NoahmpIOVarType.F90):
@@ -743,6 +746,7 @@
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
 ! Hydro
  call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt )
+ print *, "sfcheadrt from mpas pool shape", shape(sfcheadrt)
 
  do i = its,ite
     skintemp(i)   = mpas_noahmp%tsk(i)
@@ -768,7 +772,9 @@
     znt(i)        = mpas_noahmp%znt(i)
 ! Hydro
     sfcheadrt(i)  = mpas_noahmp%sfcheadrt(i)
+    ! sfcheadrt(i)  = 0.888 ! this changes mesh to 0.888 after history.init
  enddo
+
 
  do ns = 1,nsoil
     do i = its,ite
@@ -1086,9 +1092,6 @@
 !call mpas_log_write(' ')
 !call mpas_log_write('--- enter subroutine driver_lsm_noahmp:')
 
- ! print *, "0 SFCRUNOFF_IMPORT(1:4)=",mpas_noahmp%sfcrunoff_import(1:4)
- ! mpas_noahmp%sfcrunoff(:) = mpas_noahmp%sfcrunoff_import(:)
- ! print *, "1 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(1:4)
  ! this resets it!!!
  call lsm_noahmp_fromMPAS(configs,mesh,diag,diag_physics,diag_physics_noahmp,output_noahmp,sfc_input, &
                           state,time_lev,itimestep)
@@ -1102,51 +1105,50 @@
 ! #4  0x414383 in advance
 !         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/couple/nuopc/mpas_atm_nuopc.F90:565
 
+ ! we pass its and ite in but lates get it from mpas_noahmp??
+ print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
 
- ! error stop "hi"
- do i = mpas_noahmp%its,mpas_noahmp%ite
-    mpas_noahmp%sfcheadrt(i) = mpas_noahmp%sfcheadrt_import(i)
-    ! mpas_noahmp%sfcrunoff(i) = mpas_noahmp%sfcrunoff_import(i)
-    ! mpas_noahmp%smois(i,1) = mpas_noahmp%smois_import(i,1)
-    ! mpas_noahmp%smois(i,2) = mpas_noahmp%smois_import(i,2)
-    ! mpas_noahmp%smois(i,3) = mpas_noahmp%smois_import(i,3)
-    ! mpas_noahmp%smois(i,4) = mpas_noahmp%smois_import(i,4)
-    ! mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
-    ! mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
-    ! mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
-    ! mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
- end do
+ if (mpas_noahmp%sfcheadrt_import_l) then
+    mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_import(its:ite)
+ end if
+ if (mpas_noahmp%smc_import_l) then
+    mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
+    mpas_noahmp%smois(its:ite,2) = mpas_noahmp%smois2_buf(its:ite)
+    mpas_noahmp%smois(its:ite,3) = mpas_noahmp%smois3_buf(its:ite)
+    mpas_noahmp%smois(its:ite,4) = mpas_noahmp%smois4_buf(its:ite)
+ end if
+ if (mpas_noahmp%sh2o_import_l) then
+    mpas_noahmp%sh2o(its:ite,1) = mpas_noahmp%sh2o1_buf(its:ite)
+    mpas_noahmp%sh2o(its:ite,2) = mpas_noahmp%sh2o2_buf(its:ite)
+    mpas_noahmp%sh2o(its:ite,3) = mpas_noahmp%sh2o3_buf(its:ite)
+    mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
+ end if
 
- ! print *, its, ite, ":: 2 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
-
+ ! print *, "pre NoahmpDriverMain(mpas_noahmp) infxsrt =", &
+ !      mpas_noahmp%infxsrt(40:50)
  call NoahmpDriverMain(mpas_noahmp)
- ! print *, its, ite, ":: 3 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(5:9)
+
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
 
- do i = mpas_noahmp%its,mpas_noahmp%ite
-    ! FIX THIS, FIND RIGHT VARIABLE
-    ! surface_head_rt
-    !
-    mpas_noahmp%sfcheadrt_import(i) = mpas_noahmp%sfcrunoff(i)
-    ! mpas_noahmp%sfcrunoff_import(i) = mpas_noahmp%sfcrunoff(i)
-    ! mpas_noahmp%smois_import(i,1) = mpas_noahmp%smois(i,1)
-    ! mpas_noahmp%smois_import(i,2) = mpas_noahmp%smois(i,2)
-    ! mpas_noahmp%smois_import(i,3) = mpas_noahmp%smois(i,3)
-    ! mpas_noahmp%smois_import(i,4) = mpas_noahmp%smois(i,4)
-    ! mpas_noahmp%sh2o(i,1) = mpas_noahmp%sh2o_import(i,1)
-    ! mpas_noahmp%sh2o(i,2) = mpas_noahmp%sh2o_import(i,2)
-    ! mpas_noahmp%sh2o(i,3) = mpas_noahmp%sh2o_import(i,3)
-    ! mpas_noahmp%sh2o(i,4) = mpas_noahmp%sh2o_import(i,4)
- end do
+ ! if (mpas_noahmp%sfcheadrt_import_l) then
+ !    mpas_noahmp%sfcheadrt_import(its:ite) = mpas_noahmp%sfcheadrt(its:ite)
+ ! end if
+
+ if (mpas_noahmp%smc_export_l) then
+    mpas_noahmp%smois1_buf(its:ite) = mpas_noahmp%smois(its:ite,1)
+    mpas_noahmp%smois2_buf(its:ite) = mpas_noahmp%smois(its:ite,2)
+    mpas_noahmp%smois3_buf(its:ite) = mpas_noahmp%smois(its:ite,3)
+    mpas_noahmp%smois4_buf(its:ite) = mpas_noahmp%smois(its:ite,4)
+ end if
+ if (mpas_noahmp%sh2o_export_l) then
+    mpas_noahmp%sh2o1_buf(its:ite) = mpas_noahmp%sh2o(its:ite,1)
+    mpas_noahmp%sh2o2_buf(its:ite) = mpas_noahmp%sh2o(its:ite,2)
+    mpas_noahmp%sh2o3_buf(its:ite) = mpas_noahmp%sh2o(its:ite,3)
+    mpas_noahmp%sh2o4_buf(its:ite) = mpas_noahmp%sh2o(its:ite,4)
+ end if
 
 
-
- ! old debug
- ! print *, its, ite, ":: 4 MPAS_NOAHMP%SFCRUNOFF(1:4)=",mpas_noahmp%sfcrunoff(its:its+4)
-
-!call mpas_log_write('--- end subroutine driver_lsm_noahmp:')
-
- ! stop "testing where it gets reset"
+ !call mpas_log_write('--- end subroutine driver_lsm_noahmp:')
  end subroutine driver_lsm_noahmp
 
 !=================================================================================================================
