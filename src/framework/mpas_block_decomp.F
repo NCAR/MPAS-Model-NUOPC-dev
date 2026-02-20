@@ -80,6 +80,7 @@ module mpas_block_decomp
       character (len=StrKIND) :: filename
 
       logical :: no_blocks
+      logical :: useScotch
 
       no_blocks = .false.
 
@@ -98,53 +99,85 @@ module mpas_block_decomp
         allocate(local_nvertices(dminfo % nprocs))
         allocate(global_start(dminfo % nprocs))
         allocate(global_list(partial_global_graph_info % nVerticesTotal))
+ 
+         if (dminfo % my_proc_id == IO_NODE) then
 
-        if (dminfo % my_proc_id == IO_NODE) then
+            if (dminfo % total_blocks < 10) then
+               write(filename,'(a,i1)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 100) then
+               write(filename,'(a,i2)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 1000) then
+               write(filename,'(a,i3)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 10000) then
+               write(filename,'(a,i4)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 100000) then
+               write(filename,'(a,i5)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 1000000) then
+               write(filename,'(a,i6)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 10000000) then
+               write(filename,'(a,i7)') trim(blockFilePrefix), dminfo % total_blocks
+            else if (dminfo % total_blocks < 100000000) then
+               write(filename,'(a,i8)') trim(blockFilePrefix), dminfo % total_blocks
+            end if
 
-           if (dminfo % total_blocks < 10) then
-              write(filename,'(a,i1)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 100) then
-              write(filename,'(a,i2)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 1000) then
-              write(filename,'(a,i3)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 10000) then
-              write(filename,'(a,i4)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 100000) then
-              write(filename,'(a,i5)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 1000000) then
-              write(filename,'(a,i6)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 10000000) then
-              write(filename,'(a,i7)') trim(blockFilePrefix), dminfo % total_blocks
-           else if (dminfo % total_blocks < 100000000) then
-              write(filename,'(a,i8)') trim(blockFilePrefix), dminfo % total_blocks
-           end if
+            call mpas_new_unit(iunit)
+            open(unit=iunit, file=trim(filename), form='formatted', status='old', iostat=istatus)
+            
+            if (istatus /= 0) then
+#ifdef MPAS_SCOTCH
+               useScotch = .true.
+#else
+               call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
+               call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
+#endif
+            else
+               useScotch = .false.
+            end if
+         end if
 
-           call mpas_new_unit(iunit)
-           open(unit=iunit, file=trim(filename), form='formatted', status='old', iostat=istatus)
+#ifdef MPAS_SCOTCH
+         call mpas_dmpar_bcast_logical(dminfo, useScotch)
 
-           if (istatus /= 0) then
-              call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
-              call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
-           end if
+         if (useScotch) then ! Using PT-Scotch across all MPI ranks
 
-           local_nvertices(:) = 0
-           do i=1,partial_global_graph_info % nVerticesTotal
-              read(unit=iunit, fmt=*, iostat=err) global_block_id
+            ! Pre-emptively blocking this untested code path. 
+            if (numBlocks /= 0) then
+               call mpas_log_write('Scotch partitioning not available when config_number_of_blocks != 0 ', MPAS_LOG_CRIT)
+            end if
 
-              if ( err .ne. 0 ) then
-                 call mpas_log_write('Decomoposition file: ' // trim(filename) // ' contains less than $i cells', &
-                                      MPAS_LOG_CRIT, intArgs=(/partial_global_graph_info % nVerticesTotal/) )
-              end if
-              call mpas_get_owning_proc(dminfo, global_block_id, owning_proc)
-              local_nvertices(owning_proc+1) = local_nvertices(owning_proc+1) + 1
-           end do
+            call mpas_log_write('No existing block decomposition file found, invoking Scotch.')
+            call mpas_block_decomp_scotch(dminfo, partial_global_graph_info, blockFilePrefix, filename)
 
-           read(unit=iunit, fmt=*, iostat=err)
+            if (dminfo % my_proc_id == IO_NODE) then
+               open(unit=iunit, file=trim(filename), form='formatted', status='old', iostat=istatus)
+               if (istatus /= 0) then
+                  call mpas_log_write('Could not open block decomposition file for $i blocks.', MPAS_LOG_ERR, intArgs=(/dminfo % total_blocks/) )
+                  call mpas_log_write('Filename: '//trim(filename), MPAS_LOG_CRIT)
+               end if
+            end if
+         end if
+#endif
 
-           if ( err == 0 ) then
-              call mpas_log_write('Decomposition file: ' // trim(filename) // ' contains more than $i cells', &
-                                   MPAS_LOG_CRIT, intArgs=(/partial_global_graph_info % nVerticesTotal/) )
-           end if
+         if (dminfo % my_proc_id == IO_NODE) then
+
+               local_nvertices(:) = 0
+               do i=1,partial_global_graph_info % nVerticesTotal
+                  read(unit=iunit, fmt=*, iostat=err) global_block_id
+
+                  if ( err .ne. 0 ) then
+                     call mpas_log_write('Decomoposition file: ' // trim(filename) // ' contains less than $i cells', &
+                                          MPAS_LOG_CRIT, intArgs=(/partial_global_graph_info % nVerticesTotal/) )
+                  end if
+                  call mpas_get_owning_proc(dminfo, global_block_id, owning_proc)
+                  local_nvertices(owning_proc+1) = local_nvertices(owning_proc+1) + 1
+               end do
+
+               read(unit=iunit, fmt=*, iostat=err)
+
+               if ( err == 0 ) then
+                  call mpas_log_write('Decomposition file: ' // trim(filename) // ' contains more than $i cells', &
+                                       MPAS_LOG_CRIT, intArgs=(/partial_global_graph_info % nVerticesTotal/) )    
+               end if
 
            global_start(1) = 1
            do i=2,dminfo % nprocs
