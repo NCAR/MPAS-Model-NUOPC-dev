@@ -1109,7 +1109,7 @@
  print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
 
  if (mpas_noahmp%sfcheadrt_import_l) then
-    mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_import(its:ite)
+    mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
  end if
  if (mpas_noahmp%smc_import_l) then
     mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
@@ -1131,7 +1131,7 @@
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
 
  ! if (mpas_noahmp%sfcheadrt_import_l) then
- !    mpas_noahmp%sfcheadrt_import(its:ite) = mpas_noahmp%sfcheadrt(its:ite)
+ !    mpas_noahmp%sfcheadrt_buf(its:ite) = mpas_noahmp%sfcheadrt(its:ite)
  ! end if
 
  if (mpas_noahmp%smc_export_l) then
