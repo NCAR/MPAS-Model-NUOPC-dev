@@ -268,7 +268,7 @@ contains
        mesh_esmf = create_esmf_mesh(domain)
        mesh_esmf_initialized = .true.
     else
-       stop "GOOD TO KNOW"
+       stop "Realize should be only called once" ! remove this if else statement?
     end if
 
     ! ! Read in mesh rather than create it, just easier
@@ -349,6 +349,14 @@ contains
          call NUOPC_Realize(importState, field=import_field, rc=rc)
          if (check(rc, __LINE__, file)) return
          call ESMF_LogWrite("MPAS: importing " // fieldList(n)%st_name, ESMF_LOGMSG_INFO, rc=rc)
+         if (trim(fieldList(n)%st_name) == "smc1" .or. &
+              trim(fieldList(n)%st_name) == "smc") then
+            mpas_noahmp%smc_import_l = .true.
+         else if (trim(fieldList(n)%st_name) == "sh2ox1") then
+            mpas_noahmp%sh2o_import_l = .true.
+         else if (trim(fieldList(n)%st_name) == "sfchead") then
+            mpas_noahmp%sfcheadrt_import_l = .true.
+         end if
          fieldList(n)%rl_import = .true.
       else
          call ESMF_StateRemove(importState, (/fieldList(n)%st_name/), &
@@ -388,6 +396,15 @@ contains
         call NUOPC_Realize(exportState, field=export_field, rc=rc)
         if (check(rc, __LINE__, file)) return
 
+        if (trim(fieldList(n)%st_name) == "smc1" .or. &
+             trim(fieldList(n)%st_name) == "smc") then
+           mpas_noahmp%smc_export_l = .true.
+        end if
+        if (trim(fieldList(n)%st_name) == "sh2ox1") then
+           mpas_noahmp%sh2o_export_l = .true.
+        end if
+
+
         fieldList(n)%rl_export = .true.
         ! print*, "MPAS: realize exporting field ", fieldList(n)%st_name
         call ESMF_LogWrite("MPAS: exporting " // fieldList(n)%st_name, ESMF_LOGMSG_INFO, rc=rc)
@@ -403,7 +420,6 @@ contains
     end do
 
     print *, "MPAS: exiting realize fields"
-    ! stop "ACTUALLY STOPPING"
   end subroutine realize_fields
 
 
@@ -526,7 +542,6 @@ contains
     ! print *, "allocated mpas_noahmp sfcrunoff =", allocated(mpas_noahmp%sfcrunoff)
     ! print *, "shape mpas_noahmp sfcrunoff =", shape(mpas_noahmp%sfcrunoff)
 
-    ! error stop "CALLING FIELD CREATE, HOPE THIS IS SECOND!!"
 
     ! if (memflg .eq. MEMORY_POINTER) then
       select case (trim(fld_name))
@@ -566,75 +581,64 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox1')
-         ! block => domain % blocklist
-         ! do while(associated(block))
-         !    if (i > 0) error stop "not sure how to handle this"
-         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
-         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
-         !    i = i + 1
-         !    block => block % next
-         ! end do
-
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'sh2o', sh2o )
+         mpas_noahmp%sh2o1_buf(:) = sh2o(1, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 1), &
-              ! farray=sh2o(1, mpas_noahmp%its:mpas_noahmp%ite), &
-              ! farray=mpas_noahmp%sh2o_import(:,1), &
-              farray=mpas_noahmp%sh2o(:,1), &
+              farray=mpas_noahmp%sh2o1_buf(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox2')
-         ! block => domain % blocklist
-         ! do while(associated(block))
-         !    if (i > 0) error stop "not sure how to handle this"
-         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
-         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
-         !    i = i + 1
-         !    block => block % next
-         ! end do
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'sh2o', sh2o )
+         mpas_noahmp%sh2o2_buf(:) = sh2o(2, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 2), &
-              ! farray=sh2o(2, mpas_noahmp%its:mpas_noahmp%ite), &
-              ! farray=mpas_noahmp%sh2o_import(:,2), &
-              farray=mpas_noahmp%sh2o(:,2), &
+              farray=mpas_noahmp%sh2o2_buf(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox3')
-         ! block => domain % blocklist
-         ! do while(associated(block))
-         !    if (i > 0) error stop "not sure how to handle this"
-         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
-         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
-         !    i = i + 1
-         !    block => block % next
-         ! end do
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'sh2o', sh2o )
+         mpas_noahmp%sh2o3_buf(:) = sh2o(3, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 3), &
-              ! farray=sh2o(3, mpas_noahmp%its:mpas_noahmp%ite), &
-              ! farray=mpas_noahmp%sh2o_import(:,3), &
-              farray=mpas_noahmp%sh2o(:,3), &
+              farray=mpas_noahmp%sh2o3_buf(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sh2ox4')
-         ! block => domain % blocklist
-         ! do while(associated(block))
-         !    if (i > 0) error stop "not sure how to handle this"
-         !    call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
-         !    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o)
-         !    i = i + 1
-         !    block => block % next
-         ! end do
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'sh2o', sh2o )
+         mpas_noahmp%sh2o4_buf(:) = sh2o(4, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%sh2o_import(mpas_noahmp%its:mpas_noahmp%ite, 4), &
-              ! farray=sh2o(4, mpas_noahmp%its:mpas_noahmp%ite), &
-              ! farray=mpas_noahmp%sh2o_import(:,4), &
-              farray=mpas_noahmp%sh2o(:,4), &
+              farray=mpas_noahmp%sh2o4_buf(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('smc1')
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'smois', smois )
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=smois(1, mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         mpas_noahmp%smois1_buf(:) = smois(1, mpas_noahmp%its:mpas_noahmp%ite)
+         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+              meshloc=ESMF_MESHLOC_ELEMENT, &
+              farray=mpas_noahmp%smois1_buf(:), &
+              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         if (check(rc, __LINE__, file)) return
+
+
+
+
+
          ! should attach this
          ! in physics_driver
          !  ! type(domain_type),intent(inout):: domain
@@ -656,22 +660,41 @@ contains
          ! print *, "block", lbound(smois_sfc1), ubound(smois_sfc1)
          ! print *, "smois", lbound(smois), ubound(smois)
          ! print *, "its, ite =", mpas_noahmp%its, mpas_noahmp%ite
-         ! ! stop "hi"
+         ! print *, "should be -1", mpas_noahmp%smois1_buf(1:4)
+         ! stop "hi"
 
          ! get's passed to driver_lsm_noahmp as sfc_input
-         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
-              meshloc=ESMF_MESHLOC_ELEMENT, &
+         ! ----- TRIED THIS AND IT DOESN"T WORK WELL AT ALL
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=mpas_noahmp%smois1_buf(:), &
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         !-----------------
               ! farray=mpas_noahmp%smois_import(:,1), &
-              farray=mpas_noahmp%smois(:,1), &
+              ! farray=mpas_noahmp%smois(:,1), &
               ! farray=smois(1,mpas_noahmp%its:mpas_noahmp%ite), & ! bounds not working we thin
 
               ! farray=smois(1, mpas_noahmp%its:mpas_noahmp%ite), &
               ! farray=smois_sfc1(mpas_noahmp%its:mpas_noahmp%ite), &
               ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 1), & ! WORKS
-              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
          ! stop "investigating"
       case ('smc2')
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'smois', smois )
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=smois(2, mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
+         mpas_noahmp%smois2_buf(:) = smois(1, mpas_noahmp%its:mpas_noahmp%ite)
+         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+              meshloc=ESMF_MESHLOC_ELEMENT, &
+              farray=mpas_noahmp%smois2_buf(:), &
+              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         if (check(rc, __LINE__, file)) return
+
          ! block => domain % blocklist
          ! do while(associated(block))
          !    if (i > 0) error stop "not sure how to handle this"
@@ -686,14 +709,30 @@ contains
          ! end do
 
 
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 2), &
+         !      farray=mpas_noahmp%smois2_buf(:), &
+         !      ! farray=mpas_noahmp%smois(:,2), &
+         !      ! farray=smois_sfc2(mpas_noahmp%its:mpas_noahmp%ite), &
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
+      case ('smc3')
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'smois', smois )
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=smois(3, mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
+         mpas_noahmp%smois3_buf(:) = smois(3, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 2), &
-              farray=mpas_noahmp%smois(:,2), &
-              ! farray=smois_sfc2(mpas_noahmp%its:mpas_noahmp%ite), &
+              farray=mpas_noahmp%smois3_buf(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
-      case ('smc3')
+
          ! block => domain % blocklist
          ! do while(associated(block))
          !    if (i > 0) error stop "not sure how to handle this"
@@ -706,16 +745,33 @@ contains
          !    i = i + 1
          !    block => block % next
          ! end do
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      ! farray=mpas_noahmp%smois_import(:,3), &
+         !      ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 3), &
+         !      ! farray=smois(3, mpas_noahmp%its:mpas_noahmp%ite), &
+         !      farray=mpas_noahmp%smois3_buf(:), &
+         !      ! farray=smois_sfc3(mpas_noahmp%its:mpas_noahmp%ite), &
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
+      case ('smc4')
+         block => domain % blocklist
+         call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
+         call mpas_pool_get_array(sfc_input,'smois', smois )
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      farray=smois(4, mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
+         mpas_noahmp%smois4_buf(:) = smois(4, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%smois_import(:,3), &
-              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 3), &
-              ! farray=smois(3, mpas_noahmp%its:mpas_noahmp%ite), &
-              farray=mpas_noahmp%smois(:,3), &
-              ! farray=smois_sfc3(mpas_noahmp%its:mpas_noahmp%ite), &
+              farray=mpas_noahmp%smois4_buf(:), &
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
-      case ('smc4')
+
+
+
          ! block => domain % blocklist
          ! do while(associated(block))
          !    if (i > 0) error stop "not sure how to handle this"
@@ -728,15 +784,16 @@ contains
          !    i = i + 1
          !    block => block % next
          ! end do
-         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
-              meshloc=ESMF_MESHLOC_ELEMENT, &
-              ! farray=mpas_noahmp%smois_import(:,4), &
-              ! farray=smois(4, mpas_noahmp%its:mpas_noahmp%ite), &
-              ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 4), &
-              farray=mpas_noahmp%smois(:,4), &
-              ! farray=smois_sfc4(mpas_noahmp%its:mpas_noahmp%ite), &
-              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, __LINE__, file)) return
+         ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+         !      meshloc=ESMF_MESHLOC_ELEMENT, &
+         !      ! farray=mpas_noahmp%smois_import(:,4), &
+         !      ! farray=smois(4, mpas_noahmp%its:mpas_noahmp%ite), &
+         !      ! farray=mpas_noahmp%smois_import(mpas_noahmp%its:mpas_noahmp%ite, 4), &
+         !      ! farray=mpas_noahmp%smois(:,4), &
+         !      farray=mpas_noahmp%smois4_buf(:), &
+         !      ! farray=smois_sfc4(mpas_noahmp%its:mpas_noahmp%ite), &
+         !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         ! if (check(rc, __LINE__, file)) return
       case ('smcmax1')
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
@@ -774,22 +831,28 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sfchead')
-         if (.not. allocated(mpas_noahmp%sfcheadrt_import)) &
-              stop "not allocated sfcheadrt_import"
+         if (.not. allocated(mpas_noahmp%sfcheadrt_buf)) &
+              stop "sfcheadrt_buf not allocated "
          block => domain % blocklist
          call mpas_pool_get_subpool(block%structs,'diag_physics', diag_physics)
          call mpas_pool_get_array(diag_physics,'sfcheadrt', sfcheadrt )
-         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
-              meshloc=ESMF_MESHLOC_ELEMENT, &
-              farray=sfcheadrt(mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
-              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-         if (check(rc, __LINE__, file)) return
+         ! This kinda works? Trying other methoda
          ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
          !      meshloc=ESMF_MESHLOC_ELEMENT, &
-         !      farray=mpas_noahmp%sfcheadrt_import(:), &
+         !      farray=sfcheadrt(mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
          !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          ! if (check(rc, __LINE__, file)) return
+         ! print *, "sfc", sfcheadrt
+
+         mpas_noahmp%sfcheadrt_buf(:) = &
+              sfcheadrt(mpas_noahmp%its:mpas_noahmp%ite)
+         field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
+              meshloc=ESMF_MESHLOC_ELEMENT, &
+              farray=mpas_noahmp%sfcheadrt_buf(:), &
+              indexflag=ESMF_INDEX_DELOCAL, rc=rc)
+         if (check(rc, __LINE__, file)) return
       case ('infxsrt')
+         ! print *, 'infxsrt =', mpas_noahmp%infxsrt
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%infxsrt, &
@@ -804,7 +867,7 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('sfcrunoff')
-         stop "shouldn't be here"
+         stop "implement sfcrunoff in mpas_fields.f90"
          ! print *, "sfcrunoff allocated: ", allocated(mpas_noahmp%sfcrunoff_import)
          ! print *, "sfcrunoff shape: ", shape(mpas_noahmp%sfcrunoff_import)
 
@@ -819,7 +882,6 @@ contains
          ! end do
 
          ! print *, "sfcrunoff its:ite", mpas_noahmp%its, mpas_noahmp%ite
-         ! stop "hi"
          ! field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
          !      meshloc=ESMF_MESHLOC_ELEMENT, &
          !      farray=mpas_noahmp%sfcrunoff_import(mpas_noahmp%its:mpas_noahmp%ite), & ! WORKS
