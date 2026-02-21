@@ -12,6 +12,7 @@ contains
     integer :: rc
     character(:), allocatable :: mesh_file, weight_file
     rc = ESMF_SUCCESS
+    error stop "this is dead code"
 
     ! mesh_file = "x1.40962.esmf.nc"
     mesh_file = "frontrange.scrip.nc"
@@ -31,9 +32,6 @@ contains
     !      srcFileType=ESMF_FILEFORMAT_ESMFMESH, &
     !      dstFileType=ESMF_FILEFORMAT_UGRID, &
     !      weightOnlyFlag=.true., verboseFlag=.true.)
-
-
-    ! stop "fin in hydroWeightGeneration"
   end subroutine hydroWeightGeneration
 
   function gridCreate(rc) result(grid)
