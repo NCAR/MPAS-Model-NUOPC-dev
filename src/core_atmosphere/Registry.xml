@@ -978,9 +978,9 @@
 			<var name="sh2o"/>
 			<var name="smois"/>
 			<var name="tslb"/>
-                        <var name="sfcheadrt"/>
 #endif
 #ifdef WRF_HYDRO
+                        <var name="sfcheadrt"/>
 #endif
 		</stream>
 
