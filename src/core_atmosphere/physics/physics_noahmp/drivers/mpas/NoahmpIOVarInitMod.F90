@@ -126,8 +126,6 @@ contains
     if ( .not. allocated (NoahmpIO%smstav)   ) allocate ( NoahmpIO%smstav    (its:ite        )            ) ! soil moisture avail. [not used]
     if ( .not. allocated (NoahmpIO%smstot)   ) allocate ( NoahmpIO%smstot    (its:ite        )            ) ! total soil water [mm][not used]
     if ( .not. allocated (NoahmpIO%sfcrunoff)) allocate ( NoahmpIO%sfcrunoff (its:ite        )            ) ! accumulated surface runoff [m]
-    if ( .not. allocated (NoahmpIO%sfcrunoff_import)) &
-         allocate ( NoahmpIO%sfcrunoff_import (its:ite))
     if ( .not. allocated (NoahmpIO%udrunoff) ) allocate ( NoahmpIO%udrunoff  (its:ite        )            ) ! accumulated sub-surface runoff [m]
     if ( .not. allocated (NoahmpIO%albedo)   ) allocate ( NoahmpIO%albedo    (its:ite        )            ) ! total grid albedo []
     if ( .not. allocated (NoahmpIO%snowc)    ) allocate ( NoahmpIO%snowc     (its:ite        )            ) ! snow cover fraction []
@@ -140,11 +138,7 @@ contains
     if ( .not. allocated (NoahmpIO%qsfc)     ) allocate ( NoahmpIO%qsfc      (its:ite        )            ) ! bulk surface specific humidity
     if ( .not. allocated (NoahmpIO%smoiseq)  ) allocate ( NoahmpIO%smoiseq   (its:ite,1:nsoil)            ) ! equilibrium volumetric soil moisture [m3/m3]
     if ( .not. allocated (NoahmpIO%smois)    ) allocate ( NoahmpIO%smois     (its:ite,1:nsoil)            ) ! volumetric soil moisture [m3/m3]
-    if ( .not. allocated (NoahmpIO%smois_import)) &
-         allocate ( NoahmpIO%smois_import(its:ite,1:nsoil) ) ! volumetric soil moisture [m3/m3]
     if ( .not. allocated (NoahmpIO%sh2o)     ) allocate ( NoahmpIO%sh2o      (its:ite,1:nsoil)            ) ! volumetric liquid soil moisture [m3/m3]
-    if ( .not. allocated (NoahmpIO%sh2o_import)) &
-         allocate ( NoahmpIO%sh2o_import(its:ite,1:nsoil) ) ! volumetric liquid soil moisture [m3/m3]
     if ( .not. allocated (NoahmpIO%tslb)     ) allocate ( NoahmpIO%tslb      (its:ite,1:nsoil)            ) ! soil temperature [K]
 
     ! INOUT (with no Noah LSM equivalent) (as defined in WRF)
@@ -463,8 +457,15 @@ contains
 #ifdef WRF_HYDRO
     if ( .not. allocated (NoahmpIO%infxsrt)   ) allocate ( NoahmpIO%infxsrt    (its:ite) )
     if ( .not. allocated (NoahmpIO%sfcheadrt) ) allocate ( NoahmpIO%sfcheadrt  (its:ite) )
-    if ( .not. allocated (NoahmpIO%sfcheadrt_import) ) &
-         allocate ( NoahmpIO%sfcheadrt_import (its:ite) )
+    if ( .not. allocated (NoahmpIO%sfcheadrt_buf) ) allocate ( NoahmpIO%sfcheadrt_buf (its:ite) )
+    if ( .not. allocated (NoahmpIO%smois1_buf)) allocate ( NoahmpIO%smois1_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%smois2_buf)) allocate ( NoahmpIO%smois2_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%smois3_buf)) allocate ( NoahmpIO%smois3_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%smois4_buf)) allocate ( NoahmpIO%smois4_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%sh2o1_buf))  allocate ( NoahmpIO%sh2o1_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%sh2o2_buf))  allocate ( NoahmpIO%sh2o2_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%sh2o3_buf))  allocate ( NoahmpIO%sh2o3_buf(its:ite) )
+    if ( .not. allocated (NoahmpIO%sh2o4_buf))  allocate ( NoahmpIO%sh2o4_buf(its:ite) )
     if ( .not. allocated (NoahmpIO%soldrain)  ) allocate ( NoahmpIO%soldrain   (its:ite) )
     if ( .not. allocated (NoahmpIO%qtiledrain)) allocate ( NoahmpIO%qtiledrain (its:ite) )
     if ( .not. allocated (NoahmpIO%zwatble2d) ) allocate ( NoahmpIO%zwatble2d  (its:ite) )
@@ -511,9 +512,7 @@ contains
     NoahmpIO%smstav          = undefined_real
     NoahmpIO%smstot          = undefined_real
     NoahmpIO%smois           = undefined_real
-    NoahmpIO%smois_import    = undefined_real
     NoahmpIO%sh2o            = undefined_real
-    NoahmpIO%sh2o_import     = undefined_real
     NoahmpIO%tslb            = undefined_real
     NoahmpIO%snow            = undefined_real
     NoahmpIO%snowh           = undefined_real
@@ -619,9 +618,7 @@ contains
     NoahmpIO%mp_graup        = 0.0
     NoahmpIO%mp_hail         = 0.0
     NoahmpIO%sfcrunoff       = 0.0
-    NoahmpIO%sfcrunoff_import= 0.0
     NoahmpIO%sfcheadrt       = 0.0
-    NoahmpIO%sfcheadrt_import= 0.0
     NoahmpIO%udrunoff        = 0.0
 
     ! additional output
@@ -853,9 +850,18 @@ contains
     NoahmpIO%calculate_soil    = .false.  ! index for if do soil process
 
 #ifdef WRF_HYDRO
+    NoahmpIO%smois1_buf      = -1.0
+    NoahmpIO%smois2_buf      = -1.0
+    NoahmpIO%smois3_buf      = -1.0
+    NoahmpIO%smois4_buf      = -1.0
+    NoahmpIO%sh2o1_buf       = -1.0
+    NoahmpIO%sh2o2_buf       = -1.0
+    NoahmpIO%sh2o3_buf       = -1.0
+    NoahmpIO%sh2o4_buf       = -1.0
+
     NoahmpIO%infxsrt         = 0.0
     NoahmpIO%sfcheadrt       = 0.0
-    NoahmpIO%sfcheadrt_import = 0.0
+    NoahmpIO%sfcheadrt_buf   = 0.0
     NoahmpIO%soldrain        = 0.0
     NoahmpIO%qtiledrain      = 0.0
     NoahmpIO%zwatble2d       = 0.0

@@ -122,7 +122,6 @@ contains
     if ( allocated (NoahmpIO%smstav)   ) deallocate ( NoahmpIO%smstav               ) ! soil moisture avail. [not used]
     if ( allocated (NoahmpIO%smstot)   ) deallocate ( NoahmpIO%smstot               ) ! total soil water [mm][not used]
     if ( allocated (NoahmpIO%sfcrunoff)) deallocate ( NoahmpIO%sfcrunoff            ) ! accumulated surface runoff [m]
-    if ( allocated (NoahmpIO%sfcrunoff_import)) deallocate ( NoahmpIO%sfcrunoff_import)
     if ( allocated (NoahmpIO%udrunoff) ) deallocate ( NoahmpIO%udrunoff             ) ! accumulated sub-surface runoff [m]
     if ( allocated (NoahmpIO%albedo)   ) deallocate ( NoahmpIO%albedo               ) ! total grid albedo []
     if ( allocated (NoahmpIO%snowc)    ) deallocate ( NoahmpIO%snowc                ) ! snow cover fraction []
@@ -135,9 +134,7 @@ contains
     if ( allocated (NoahmpIO%qsfc)     ) deallocate ( NoahmpIO%qsfc                 ) ! bulk surface specific humidity
     if ( allocated (NoahmpIO%smoiseq)  ) deallocate ( NoahmpIO%smoiseq              ) ! equilibrium volumetric soil moisture [m3/m3]
     if ( allocated (NoahmpIO%smois)    ) deallocate ( NoahmpIO%smois                ) ! volumetric soil moisture [m3/m3]
-    if ( allocated (NoahmpIO%smois_import)) deallocate ( NoahmpIO%smois_import      ) ! volumetric soil moisture [m3/m3]
     if ( allocated (NoahmpIO%sh2o)     ) deallocate ( NoahmpIO%sh2o                 ) ! volumetric liquid soil moisture [m3/m3]
-    if ( allocated (NoahmpIO%sh2o_import)) deallocate ( NoahmpIO%sh2o_import        ) ! volumetric liquid soil moisture [m3/m3]
     if ( allocated (NoahmpIO%tslb)     ) deallocate ( NoahmpIO%tslb                 ) ! soil temperature [K]
 
     ! INOUT (with no Noah LSM equivalent) (as defined in WRF)
@@ -456,7 +453,17 @@ contains
 #ifdef WRF_HYDRO
     if ( allocated (NoahmpIO%infxsrt)   ) deallocate ( NoahmpIO%infxsrt             )
     if ( allocated (NoahmpIO%sfcheadrt) ) deallocate ( NoahmpIO%sfcheadrt           )
-    if ( allocated (NoahmpIO%sfcheadrt_import) ) deallocate ( NoahmpIO%sfcheadrt_import )
+    ! Buffers for NUOPC
+    if ( allocated (NoahmpIO%sfcheadrt_buf)) deallocate ( NoahmpIO%sfcheadrt_buf )
+    if ( allocated (NoahmpIO%smois1_buf)) deallocate ( NoahmpIO%smois1_buf)
+    if ( allocated (NoahmpIO%smois2_buf)) deallocate ( NoahmpIO%smois2_buf)
+    if ( allocated (NoahmpIO%smois3_buf)) deallocate ( NoahmpIO%smois3_buf)
+    if ( allocated (NoahmpIO%smois4_buf)) deallocate ( NoahmpIO%smois4_buf)
+    if ( allocated (NoahmpIO%sh2o1_buf))  deallocate ( NoahmpIO%sh2o1_buf)
+    if ( allocated (NoahmpIO%sh2o2_buf))  deallocate ( NoahmpIO%sh2o2_buf)
+    if ( allocated (NoahmpIO%sh2o3_buf))  deallocate ( NoahmpIO%sh2o3_buf)
+    if ( allocated (NoahmpIO%sh2o4_buf))  deallocate ( NoahmpIO%sh2o4_buf)
+
     if ( allocated (NoahmpIO%soldrain)  ) deallocate ( NoahmpIO%soldrain            )
     if ( allocated (NoahmpIO%qtiledrain)) deallocate ( NoahmpIO%qtiledrain          )
     if ( allocated (NoahmpIO%zwatble2d) ) deallocate ( NoahmpIO%zwatble2d           )

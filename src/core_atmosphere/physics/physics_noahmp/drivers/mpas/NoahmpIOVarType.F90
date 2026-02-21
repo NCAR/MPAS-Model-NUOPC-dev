@@ -106,7 +106,21 @@ module NoahmpIOVarType
 #ifdef WRF_HYDRO
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   infxsrt            ! surface infiltration
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   sfcheadrt          ! surface water head
-    real(kind=kind_noahmp), allocatable, dimension(:)      ::   sfcheadrt_import   ! surface water head
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::   sfcheadrt_buf      ! surface water head
+    logical :: sfcheadrt_import_l = .false.
+    logical :: smc_import_l = .false.
+    logical :: smc_export_l = .false.
+    logical :: sh2o_import_l = .false.
+    logical :: sh2o_export_l = .false.
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  smois1_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  smois2_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  smois3_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  smois4_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  sh2o1_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  sh2o2_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  sh2o3_buf
+    real(kind=kind_noahmp), allocatable, dimension(:)      ::  sh2o4_buf
+
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   soldrain           ! soil drainage
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   qtiledrain         ! tile drainage
     real(kind=kind_noahmp), allocatable, dimension(:)      ::   zwatble2d          ! water table depth
@@ -162,15 +176,12 @@ module NoahmpIOVarType
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  smstav              ! soil moisture avail. [not used]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  smstot              ! total soil water [mm][not used]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  sfcrunoff           ! accumulated surface runoff [m]
-    real(kind=kind_noahmp), allocatable, dimension(:)      ::  sfcrunoff_import    ! accumulated surface runoff [m]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  udrunoff            ! accumulated sub-surface runoff [m]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  albedo              ! total grid albedo []
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  snowc               ! snow cover fraction []
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  smoiseq             ! volumetric soil moisture [m3/m3]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  smois               ! volumetric soil moisture [m3/m3]
-    real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  smois_import        ! volumetric soil moisture [m3/m3]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  sh2o                ! volumetric liquid soil moisture [m3/m3]
-    real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  sh2o_import         ! volumetric liquid soil moisture [m3/m3]
     real(kind=kind_noahmp), allocatable, dimension(:,:)    ::  tslb                ! soil temperature [K]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  snow                ! snow water equivalent [mm]
     real(kind=kind_noahmp), allocatable, dimension(:)      ::  snowh               ! physical snow depth [m]
