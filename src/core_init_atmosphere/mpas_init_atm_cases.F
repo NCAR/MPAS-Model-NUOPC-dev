@@ -1429,11 +1429,10 @@ module init_atm_cases
       integer, dimension(:), pointer :: nEdgesOnEdge 
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
-      real (kind=RKIND), pointer :: x_period, y_period
+
       integer :: iCell, iCell1, iCell2 , iEdge, ivtx, i, k, nz, nz1, itr, cell1, cell2
       integer, pointer :: nEdges, nVertices, maxEdges, nCellsSolve
       integer, pointer :: index_qv
-      integer, pointer :: index_tke
 
       real (kind=RKIND), dimension(nVertLevels + 1 ) :: zc, zw, ah
       real (kind=RKIND), dimension(nVertLevels ) :: zu, dzw, rdzwp, rdzwm
@@ -1460,7 +1459,6 @@ module init_atm_cases
       real (kind=RKIND), pointer :: nominalMinDc
       logical, pointer :: on_a_sphere
       real (kind=RKIND), pointer :: sphere_radius
-      real (kind=RKIND), pointer :: config_ztop
 
       real (kind=RKIND), dimension(:,:), pointer :: t_init, w, rw, v, rho, theta
       real (kind=RKIND), dimension(:), pointer :: u_init, qv_init, angleEdge, fEdge, fVertex
@@ -1482,13 +1480,10 @@ module init_atm_cases
       call mpas_pool_get_array(mesh, 'areaTriangle', areaTriangle)
       call mpas_pool_get_array(mesh, 'kiteAreasOnVertex', kiteAreasOnVertex)
       call mpas_pool_get_array(mesh, 'nominalMinDc', nominalMinDc)
-     
-      call mpas_pool_get_config(mesh, 'x_period', x_period)
-      call mpas_pool_get_config(mesh, 'y_period', y_period)
+
       call mpas_pool_get_config(mesh, 'on_a_sphere', on_a_sphere)
       call mpas_pool_get_config(mesh, 'sphere_radius', sphere_radius)
       call mpas_pool_get_config(configs, 'config_interface_projection', config_interface_projection)
-      call mpas_pool_get_config(configs, 'config_ztop', config_ztop)
 
       !
       ! Scale all distances
@@ -1511,8 +1506,6 @@ module init_atm_cases
       areaTriangle(:) = areaTriangle(:) * a_scale**2.0
       kiteAreasOnVertex(:,:) = kiteAreasOnVertex(:,:) * a_scale**2.0
       nominalMinDc = nominalMinDc * a_scale
-      x_period = x_period * a_scale
-      y_period = y_period * a_scale
 
       call mpas_pool_get_array(mesh, 'weightsOnEdge', weightsOnEdge)
       call mpas_pool_get_array(mesh, 'nEdgesOnEdge', nEdgesOnEdge)
@@ -1573,7 +1566,6 @@ module init_atm_cases
       call mpas_pool_get_array(state, 'scalars', scalars)
 
       call mpas_pool_get_dimension(state, 'index_qv', index_qv)
-      call mpas_pool_get_dimension(state, 'index_tke', index_tke)
 
       scalars(:,:,:) = 0.
 
@@ -1601,8 +1593,7 @@ module init_atm_cases
       !     metrics for hybrid coordinate and vertical stretching
 
       str = 1.0
-!      zt = 20000.
-      zt = config_ztop
+      zt = 20000.
       dz = zt/float(nz1)
 
 !      write(0,*) ' dz = ',dz
@@ -1888,18 +1879,6 @@ module init_atm_cases
           end if
            t (k,i) = thi(k,i)*(1.+1.61*scalars(index_qv,k,i))
         end do
-      end do
-!
-!  initial seed for tke
-!
-!     call mpas_log_write('index_qv $i ', intArgs=(/index_qv/))
-!     call mpas_log_write('index_tke $i ', intArgs=(/index_tke/))
-      scalars(index_tke,:,:) = 0.
-
-      do k = 1,nz1  
-          do i=1,nCells
-             scalars(index_tke,k,i) = 0.1
-          end do
       end do
 
       do itr=1,30
