@@ -59,6 +59,9 @@ utilities: $(PHYSCORE)
 atmcore: $(PHYSCORE) dycore diagcore $(OBJS)
 	ar -ru libdycore.a $(OBJS) dynamics/*.o $(PHYS_OBJS) diagnostics/*.o
 
+nuopc: $(PHYSCORE) dycore diagcore $(OBJS)
+	( cd nuopc; $(MAKE) all )
+
 mpas_atm_core_interface.o: mpas_atm_core.o
 
 mpas_atm_core.o: dycore diagcore mpas_atm_threading.o mpas_atm_halos.o
@@ -70,6 +73,7 @@ clean:
 	( cd dynamics; $(MAKE) clean )
 	( cd diagnostics; $(MAKE) clean )
 	( cd utils; $(MAKE) clean )
+	( cd nuopc; $(MAKE) clean )
 	( cd ../..; rm -f *TBL )
 	( cd ../..; rm -f *DATA* )
 	$(RM) -r libphys

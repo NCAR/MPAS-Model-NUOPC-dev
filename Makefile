@@ -684,6 +684,17 @@ intel:   # BUILDTARGET Intel oneAPI Fortran, C, and C++ compiler suite
 CPPINCLUDES =
 FCINCLUDES =
 LIBS =
+MPAS_PREFIX ?= $(CURDIR)
+MPAS_LIBDIR ?= $(MPAS_PREFIX)/lib
+MPAS_MODDIR ?= $(MPAS_PREFIX)/mod
+
+NUOPC  ?= false
+ifeq ($(NUOPC), true)
+MPAS_ESMF = external
+NUOPC_MESSAGE="MPAS was built with NUOPC cap libraries."
+else
+NUOPC_MESSAGE="MPAS was built without NUOPC cap libraries."
+endif
 
 export MPAS_ESMF ?= embedded
 ifeq "$(MPAS_ESMF)" "external"
@@ -694,9 +705,11 @@ ifeq "$(MPAS_ESMF)" "external"
   export MPAS_ESMF_INC = $(ESMF_F90COMPILEPATHS)
   export MPAS_ESMF_LIB = $(ESMF_F90LINKPATHS) $(ESMF_F90ESMFLINKPATHS) $(ESMF_F90ESMFLINKLIBS)
   override CPPFLAGS += -DMPAS_EXTERNAL_ESMF_LIB=true
+  ESMF_MESSAGE="MPAS was built with an external ESMF library using ESMFMKFILE"
 else ifeq "$(MPAS_ESMF)" "embedded"
   export MPAS_ESMF_INC = -I$(PWD)/src/external/esmf_time_f90
   export MPAS_ESMF_LIB = -L$(PWD)/src/external/esmf_time_f90 -lesmf_time
+  ESMF_MESSAGE="MPAS was built with the embedded ESMF library."
 else
   $(error Invalid MPAS_ESMF option: $(MPAS_ESMF) - valid options "embedded", "external")
 endif
@@ -1441,6 +1454,8 @@ override CPPFLAGS += "-DMPAS_SMIOL_SUPPORT"
 endif
 
 mpas_main: $(MAIN_DEPS)
+	if [ ! -d $(MPAS_LIBDIR) ]; then mkdir $(MPAS_LIBDIR); fi
+	if [ ! -d $(MPAS_MODDIR) ]; then mkdir $(MPAS_MODDIR); fi
 	cd src; $(MAKE) FC="$(FC)" \
                  CC="$(CC)" \
                  CXX="$(CXX)" \
@@ -1462,7 +1477,11 @@ mpas_main: $(MAIN_DEPS)
                  AUTOCLEAN_DEPS="$(AUTOCLEAN_DEPS)" \
                  GEN_F90="$(GEN_F90)" \
                  NAMELIST_SUFFIX="$(NAMELIST_SUFFIX)" \
-                 EXE_NAME="$(EXE_NAME)"
+                 EXE_NAME="$(EXE_NAME)" \
+                 MPAS_PREFIX="$(MPAS_PREFIX)" \
+                 MPAS_LIBDIR="$(MPAS_LIBDIR)" \
+                 MPAS_MODDIR="$(MPAS_MODDIR)" \
+                 NUOPC="$(NUOPC)"
 
 	if [ -e src/$(EXE_NAME) ]; then mv src/$(EXE_NAME) .; fi
 	( cd src/core_$(CORE); $(MAKE) ROOT_DIR="$(PWD)" post_build )
@@ -1483,14 +1502,18 @@ endif
 	@echo $(GEN_F90_MESSAGE)
 	@echo $(TIMER_MESSAGE)
 	@echo $(IO_MESSAGE)
+	@echo $(ESMF_MESSAGE)
+	@echo $(NUOPC_MESSAGE)
 	@echo "*******************************************************************************"
 clean:
-	cd src; $(MAKE) clean RM="$(RM)" CORE="$(CORE)" AUTOCLEAN="$(AUTOCLEAN)"
+	cd src; $(MAKE) clean RM="$(RM)" CORE="$(CORE)" AUTOCLEAN="$(AUTOCLEAN)" NUOPC="$(NUOPC)"
 	$(RM) $(EXE_NAME)
 	$(RM) namelist.$(NAMELIST_SUFFIX).defaults
 	$(RM) streams.$(NAMELIST_SUFFIX).defaults
 	if [ -f .build_opts.framework ]; then $(RM) .build_opts.framework; fi
 	if [ -f .build_opts.$(CORE) ]; then $(RM) .build_opts.$(CORE); fi
+	if [ -d $(MPAS_LIBDIR) ]; then $(RM) -r $(MPAS_LIBDIR); fi
+	if [ -d $(MPAS_MODDIR) ]; then $(RM) -r $(MPAS_MODDIR); fi
 
 core_error:
 	@echo ""
@@ -1539,6 +1562,7 @@ errmsg:
 	@echo "    OPENACC=true  - builds and links with OpenACC flags. Default is to not use OpenACC."
 	@echo "    PRECISION=double - builds with default double-precision real kind. Default is to use single-precision."
 	@echo "    SHAREDLIB=true - generate position-independent code suitable for use in a shared library. Default is false."
+	@echo "    NUOPC=true - builds NUOPC library (libmpas_nuopc.a) and installs to lib/ with mod files to mod/. Default is false."
 	@echo ""
 	@echo "Ensure that NETCDF, PNETCDF, PIO, and PAPI (if USE_PAPI=true) are environment variables"
 	@echo "that point to the absolute paths for the libraries."
