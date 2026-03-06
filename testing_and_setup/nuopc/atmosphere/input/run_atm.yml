@@ -22,6 +22,6 @@ ESMX:
 
 ATM:
   model: mpas_atmosphere
-  petList:          [0-3]
+  petList:          [0-1]
   attributes:
     Verbosity: high

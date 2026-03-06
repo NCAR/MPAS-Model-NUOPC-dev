@@ -18,6 +18,8 @@ import zipfile
 import tempfile
 import urllib.request
 import urllib.error
+import configparser
+import json
 
 
 class SpinnerProgress:
@@ -135,11 +137,19 @@ class ESMXBuild:
 
 class Input:
     """Class to represent an input file or directory."""
+    valid_options = ['src', 'type', 'download', 'archive', 'strip']
 
     def __init__(self, input_spec: dict):
 
+        for key in input_spec.keys():
+            if not key in Input.valid_options:
+                raise ValueError(f"Input includes unknown key '{key}'")
+
+        if 'src' in input_spec:
+            self.src = input_spec['src']
+        else:
+            raise ValueError(f"Input specification must include 'src' key")
         self.type = input_spec.get('type', 'copy')
-        self.src = input_spec['src']
         self.strip = input_spec.get('strip', 0)
         if 'download' in input_spec:
             self.download = bool(input_spec['download'])
@@ -172,7 +182,7 @@ class Input:
 
     def _detect_download(self):
         """Detect if file needs to be downloaded"""
-    
+
         src_str = str(self.src).lower()
         return (src_str.startswith('http://') or
                 src_str.startswith('https://'))
@@ -192,8 +202,13 @@ class Input:
         else:
             return None
 
-    def _strip_members(self, archive, level=0):
+    def _strip_members(self, archive):
         """Strip levels from archive"""
+
+        try:
+            level = int(self.strip)
+        except ValueError as e:
+            raise ValueError(f"Cannot strip '{self.strip}' levels")
 
         stripped_files = []
         for member in archive.getmembers():
@@ -216,7 +231,7 @@ class Input:
         try:
             urllib.request.urlretrieve(self.src, dest_path / src_path.name )
         except urllib.error.URLError as e:
-            raise urllib.error.URLError(f"✗ Failed to download {self.src}: {e}") from e
+            raise urllib.error.URLError(f"Failed to download {self.src}: {e}") from e
 
     def _copy_input(self, dest_path):
         """Copy file or directory from source to destination."""
@@ -266,30 +281,30 @@ class Input:
                     archive_path = Path(tmp.name)
                     urllib.request.urlretrieve(self.src, archive_path)
             except urllib.error.URLError as e:
-                raise urllib.error.URLError(f"✗ Failed to download {self.src}: {e}") from e
+                raise urllib.error.URLError(f"Failed to download {self.src}: {e}") from e
         else:
             archive_path = self.src
 
         try:
             if self.archive == 'tar_gz':
                 with tarfile.open(archive_path, 'r:gz') as tar:
-                    members = self._strip_members(tar, level=self.strip)
+                    members = self._strip_members(tar)
                     tar.extractall(path=dest_path, members=members)
             elif self.archive == 'tar_bz2':
                 with tarfile.open(archive_path, 'r:bz2') as tar:
-                    members = self._strip_members(tar, level=self.strip)
+                    members = self._strip_members(tar)
                     tar.extractall(path=dest_path, members=members)
             elif self.archive == 'tar':
                 with tarfile.open(archive_path, 'r') as tar:
-                    members = self._strip_members(tar, level=self.strip)
+                    members = self._strip_members(tar)
                     tar.extractall(path=dest_path, members=members)
             elif self.archive == 'zip':
                 with zipfile.ZipFile(archive_path, 'r') as zf:
-                    members = self._strip_members(zf, level=self.strip)
+                    members = self._strip_members(zf)
                     zf.extractall(path=dest_path, members=members)
             else:
                 raise ValueError(
-                    f"✗ Archive format is not supported: {self.src}. "
+                    f"Archive format is not supported: {self.src}. "
                     "Supported formats: .tar.gz, .tar.bz2, .tar, .zip"
                 )
 
@@ -323,13 +338,12 @@ class Input:
 class ESMXTest:
     """Class to manage ESMX run execution."""
 
-    def __init__(self, name, rundir, esmx, esmxcfg, runinputs, mpitsks, logfile):
+    def __init__(self, name, rundir, esmxcfg, runinputs, mpitsks, logfile):
         self.name = name
         self.rundir = rundir
-        self.esmx = esmx
         self.esmxcfg = esmxcfg
         self.runinputs = runinputs
-        self.mpitsks = mpitsks
+        self.mpitsks = int(mpitsks)
         self.logfile = logfile
 
     def setup(self):
@@ -358,7 +372,7 @@ class ESMXTest:
         elapsed = int(time.time() - start_time)
         return {'success': True, 'elapsed': elapsed}
 
-    def run(self, faillvl=1):
+    def run(self, esmx: ESMFBuild, faillvl=1):
         """Run the ESMX executable with MPI."""
 
         runenv = os.environ.copy()
@@ -368,7 +382,7 @@ class ESMXTest:
             runenv['ESMF_RUNTIME_ABORT_LOGMSG_TYPES'] = "ESMF_LOGMSG_ERROR"
 
         run_ret = run_command(
-            f'mpirun -np {self.mpitsks} {self.esmx.esmfexe} {self.esmxcfg}',
+            f'mpirun -np {self.mpitsks} {esmx.esmfexe} {self.esmxcfg}',
             self.rundir,
             runenv,
             self.logfile
@@ -377,6 +391,78 @@ class ESMXTest:
            f.write(f'\nSee run directory: {self.rundir}')
 
         return run_ret
+
+
+def load_tests_from_config(config):
+    """Load test configurations from INI file.
+
+    Args:
+        config: Dict with 'test_config', 'rundir', and 'logdir' paths
+
+    Returns:
+        List of ESMXTest objects
+    """
+
+    start_time = time.time()
+
+    tests = []
+    if not Path(config['test_config']).exists():
+        print(f"✗ Test configuration file missing: {config['test_config']}")
+        elapsed = int(time.time() - start_time)
+        return {'success': False, 'elapsed': elapsed}, tests
+
+    parser = configparser.ConfigParser()
+    parser.read(config['test_config'])
+
+    # Iterate through all sections except DEFAULT
+    for section in parser.sections():
+        runinputs_list = []
+
+        try:
+            name = parser.get(section, 'name', fallback=section)
+            rundir_name = parser.get(section, 'rundir', fallback=section)
+            esmxcfg = parser.get(section, 'esmxcfg')
+            mpitsks = parser.getint(section, 'mpitsks', fallback=4)
+            runinputs_str = parser.get(section, 'runinputs', fallback='')
+        except ValueError as e:
+            print(f"✗ Invalid configuration value in '{section}': {e}")
+            elapsed = int(time.time() - start_time)
+            return {'success': False, 'elapsed': elapsed}, tests
+        except configparser.NoOptionError as e:
+            print(f"✗ Missing configuration option: {e}")
+            elapsed = int(time.time() - start_time)
+            return {'success': False, 'elapsed': elapsed}, tests
+
+        # Parse runinputs as JSON list of dictionaries
+        for line in runinputs_str.splitlines():
+            if line.strip():
+                try:
+                    runinputs_list.append(Input(json.loads(line)))
+                except json.JSONDecodeError as e:
+                    print(f"✗ Failed to parse runinputs in {section}")
+                    print(f"  {line}")
+                    elapsed = int(time.time() - start_time)
+                    return {'success': False, 'elapsed': elapsed}, tests
+                except Exception as e:
+                    print(f"✗ Failed to parse runinputs in {section}")
+                    print(f"  {e}: {line}")
+                    elapsed = int(time.time() - start_time)
+                    return {'success': False, 'elapsed': elapsed}, tests
+
+        # Create ESMXTest object
+        test = ESMXTest(
+            name=name,
+            rundir=config['rundir'] / rundir_name,
+            esmxcfg=esmxcfg,
+            runinputs=runinputs_list,
+            mpitsks=mpitsks,
+            logfile=config['logdir'] / f"run_{name}.log"
+        )
+        tests.append(test)
+
+
+    elapsed = int(time.time() - start_time)
+    return {'success': True, 'elapsed': elapsed}, tests
 
 
 def main():
@@ -400,31 +486,37 @@ def main():
         parser.add_argument("--failure-level", "-L",
             type=int, default=1,
             help="Failure level for the tests, higher is stricter (default: 1)",)
+        parser.add_argument("--test-config", "-t",
+            type=str, default="all_tests.ini",
+            help="Test configuration file (default: all_tests.ini)",)
+        args = parser.parse_args()
 
         config = {}
         config['curdir'] = Path(__file__).parent.resolve()
         config['mpasdir'] = config['curdir'].resolve().parent.parent.parent
         config['logdir'] = config['curdir'] / "logs"
         config['rundir'] = config['curdir'] / "run"
-        config['compiler'] = parser.parse_args().compiler
-        config['bldtsks'] = parser.parse_args().build_tasks
-        config['faillvl'] = parser.parse_args().failure_level
-        if parser.parse_args().clean_only:
+        config['compiler'] = args.compiler
+        config['bldtsks'] = args.build_tasks
+        config['faillvl'] = args.failure_level
+        config['test_config'] = Path(args.test_config).resolve()
+        if args.clean_only:
             config['clean'] = True
             config['execute'] = False
         else:
-            config['clean'] = parser.parse_args().clean_first
+            config['clean'] = args.clean_first
             config['execute'] = True
 
         print("=" * 80)
-        print(f"MPAS Atmosphere ESMX Build Test")
-        print(f"\tMPAS Root:         {config['mpasdir']}")
-        print(f"\tCompiler Target:   {config['compiler']}")
-        print(f"\tBuild Tasks:       {config['bldtsks']}")
-        print(f"\tClean:             {config['clean']}")
-        print(f"\tFailure Level:     {config['faillvl']}")
-        print(f"\tLog Directory:     {config['logdir']}")
-        print(f"\tRun Directory:     {config['rundir']}")
+        print(f"MPAS NUOPC Atmosphere Tests (ESMX)")
+        print(f"  Compiler:       {config['compiler']}")
+        print(f"  Build Tasks:    {config['bldtsks']}")
+        print(f"  Clean:          {config['clean']}")
+        print(f"  Failure Level:  {config['faillvl']}")
+        print(f"  MPAS Root:      {config['mpasdir']}")
+        print(f"  Test Config:    {config['test_config']}")
+        print(f"  Log Directory:  {config['logdir']}")
+        print(f"  Run Directory:  {config['rundir']}")
         print("=" * 80)
         print()
 
@@ -436,6 +528,16 @@ def main():
             shutil.rmtree(config['rundir'])
         config['rundir'].mkdir(parents=True, exist_ok=True)
 
+        # load configuration
+        print(f"Loading test configuration...", flush=True)
+        config_load_ret, all_tests = load_tests_from_config(config)
+        if config_load_ret.get('success', False):
+            print(f"✓ Configuration load succeeded: " +
+                  f"{len(all_tests)} test(s)")
+        else:
+            print(f"✗ Configuration load failed")
+            sys.exit(1)
+
         # define MPAS build
         mpas_build = MPASBuild(
             buildroot=config['mpasdir'],
@@ -444,7 +546,7 @@ def main():
             logfile=config['logdir'] / "build_mpas.log")
 
         # run MPAS build
-        print(f"Building MPAS with NUOPC support...", flush=True)
+        print(f"\nBuilding MPAS with NUOPC support...", flush=True)
         if config['clean']:
             mpas_clean_ret = mpas_build.clean()
             if mpas_clean_ret.get('success', False):
@@ -491,31 +593,6 @@ def main():
                 print(f"  see log file: {esmx_build.logfile}")
                 sys.exit(1)
 
-        # define ESMX tests
-        all_tests = [
-            ESMXTest(
-                name="atm_mountain_wave",
-                rundir=config['rundir'] / "atm_mountain_wave",
-                esmx=esmx_build,
-                esmxcfg="run_atm.yml",
-                runinputs=[Input.typ_copy("input/run_atm.yml"),
-                           Input.typ_symlink("input/fd_mpas.yml"),
-                           Input.typ_extract("https://www2.mmm.ucar.edu/projects/mpas/test_cases/v7.0/mountain_wave.tar.gz", strip=1)],
-                mpitsks=4,
-                logfile=config['logdir'] / "run_atm_mountain_wave.log"
-            ),
-            ESMXTest(
-                name="atmocn",
-                rundir=config['rundir'] / "atmocn",
-                esmx=esmx_build,
-                esmxcfg="run_atmocn.yml",
-                runinputs=[Input.typ_copy("input/run_atmocn.yml"),
-                           Input.typ_symlink("input/fd_mpas.yml")],
-                mpitsks=4,
-                logfile=config['logdir'] / "run_atmocn.log"
-            ),
-        ]
-
         # run ESMX tests
         failure_count = 0
         for test in all_tests:
@@ -538,7 +615,8 @@ def main():
                     print(f"✗ {test.name} setup failed")
                     failure_count += 1
                     continue
-                test_run_ret = test.run(faillvl=config['faillvl'])
+                test_run_ret = test.run(esmx=esmx_build,
+                                        faillvl=config['faillvl'])
                 if test_run_ret.get('success', False):
                     print(f"✓ {test.name} run succeeded: " +
                           f"{test_run_ret['elapsed']} second(s)")
