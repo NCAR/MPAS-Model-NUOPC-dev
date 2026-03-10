@@ -1,0 +1,22 @@
+{
+	"name": "MPAS Dev Container",
+	"build": {
+        "dockerfile": "docker/Dockerfile"
+	},
+	"customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "bash",
+                        "args": ["-l"]
+                    }
+                }
+            }
+        }
+    },
+	"workspaceMount": "source=${localWorkspaceFolder},target=/home/mpas-dev/MPAS-Model,type=bind,consistency=cached",
+	"workspaceFolder": "/home/mpas-dev/MPAS-Model",
+	"runArgs": []
+}
