@@ -1,0 +1,10 @@
+application:
+  exe_name: esmx_mpas
+
+components:
+
+  mpas_atmosphere:
+    build_type: none
+    libraries: mpas_nuopc
+    install_prefix: ../../..
+    fort_module: mpas_nuopc_atm.mod
