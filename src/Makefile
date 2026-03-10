@@ -6,7 +6,12 @@ include Makefile.in.$(ESM)
 
 else
 
-all: mpas
+BUILD_ALL = mpas
+ifeq "$(NUOPC)" "true"
+BUILD_ALL += nuopc_lib
+endif
+
+all: $(BUILD_ALL)
 
 mpas: $(AUTOCLEAN_DEPS) externals frame ops dycore drver
 	$(LINKER) $(LDFLAGS) -o $(EXE_NAME) driver/*.o -L. -ldycore -lops -lframework $(LIBS) $(MPAS_ESMF_INC) $(MPAS_ESMF_LIB)
@@ -35,8 +40,18 @@ dycore: $(AUTOCLEAN_DEPS) build_tools externals frame ops
 	( cd core_$(CORE); $(MAKE) CPPFLAGS="$(CPPFLAGS)" CPPINCLUDES="$(CPPINCLUDES)" all ) 
 	ln -sf core_$(CORE)/libdycore.a libdycore.a
 
+nuopc_lib: mpas
+	( cd core_$(CORE); $(MAKE) CPPFLAGS="$(CPPFLAGS)" CPPINCLUDES="$(CPPINCLUDES)" FFLAGS="$(FFLAGS)" FCINCLUDES="$(FCINCLUDES)" nuopc )
+	ar -ru $(MPAS_LIBDIR)/libmpas_nuopc.a libframework.a libops.a libdycore.a core_$(CORE)/nuopc/*.o
+	ranlib $(MPAS_LIBDIR)/libmpas_nuopc.a
+	cp core_$(CORE)/nuopc/*.mod $(MPAS_MODDIR)/.
 
-clean: clean_shared clean_core
+CLEAN_ALL = clean_shared clean_core
+ifeq "$(NUOPC)" "true"
+CLEAN_ALL += clean_nuopc
+endif
+
+clean: $(CLEAN_ALL)
 
 clean_core:
 ifeq "$(AUTOCLEAN)" "true"
@@ -64,3 +79,12 @@ endif
 	( cd framework; $(MAKE) clean )
 	( cd operators; $(MAKE) clean )
 	( cd driver; $(MAKE) clean )
+
+clean_nuopc:
+	$(info )
+	$(info *********************************************************************************************)
+	$(info The NUOPC library will be cleaned.)
+	$(info *********************************************************************************************)
+	$(info )
+	$(RM) $(MPAS_LIBDIR)/libmpas_nuopc.a
+	$(RM) $(MPAS_MODDIR)/*.mod
