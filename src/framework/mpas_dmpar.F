@@ -349,6 +349,8 @@ include 'mpif.h'
 #ifdef _MPI
       integer :: mpi_ierr, mpi_errcode
 
+      mpi_errcode = 6   ! corresponds to POSIX SIGABRT, though the specific
+                        ! value here probably does not matter much
       call MPI_Abort(dminfo % comm, mpi_errcode, mpi_ierr)
 #endif
 
