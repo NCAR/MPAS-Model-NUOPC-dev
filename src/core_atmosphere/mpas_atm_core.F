@@ -60,7 +60,6 @@ module atm_core
       character (len=StrKIND), pointer :: initial_time1, initial_time2
       type (MPAS_Time_Type) :: startTime
 
-      real (kind=RKIND), dimension(:,:), pointer :: u, ru, rw, pv_edge
       real (kind=RKIND), pointer :: nominalMinDc
       real (kind=RKIND), pointer :: config_len_disp
       real (kind=RKIND), pointer :: Time
@@ -239,14 +238,7 @@ module atm_core
       startTime = mpas_get_clock_time(clock, MPAS_START_TIME, ierr)
       call mpas_get_time(startTime, dateTimeString=startTimeStamp) 
 
-      ! This copy is temporarily needed to ensure that the field u is available on the device
-      ! prior to the GPU-direct halo exchange in the call to exchange_halo_group. It will be
-      ! removed in subsequent commits that introduce a namelist option to select whether halo exchanges
-      ! are performed on the device or not.
-      call mpas_pool_get_array(domain % blocklist % allFields, 'u', u, 1)
-      !$acc enter data copyin(u)
       call exchange_halo_group(domain, 'initialization:u')
-      !$acc exit data copyout(u)
 
 
       !
@@ -284,18 +276,7 @@ module atm_core
           block => block % next
       end do
 
-      ! This copy is temporarily needed to ensure that ru, rw, pv_edge are available on the device
-      ! prior to the GPU-direct halo exchange in the call to exchange_halo_group. It will be
-      ! removed in subsequent commits that introduce a namelist option to select whether halo exchanges
-      ! are performed on the device or not.
-      call mpas_pool_get_array(domain % blocklist % allFields, 'ru', ru, 1)
-      !$acc enter data copyin(ru)
-      call mpas_pool_get_array(domain % blocklist % allFields, 'rw', rw, 1)
-      !$acc enter data copyin(rw)
-      call mpas_pool_get_array(domain % blocklist % allFields, 'pv_edge', pv_edge)
-      !$acc enter data copyin(pv_edge)
       call exchange_halo_group(domain, 'initialization:pv_edge,ru,rw')
-      !$acc exit data copyout(pv_edge,ru,rw)
 
       call mpas_atm_diag_setup(domain % streamManager, domain % blocklist % configs, &
                                domain % blocklist % structs, domain % clock, domain % dminfo)

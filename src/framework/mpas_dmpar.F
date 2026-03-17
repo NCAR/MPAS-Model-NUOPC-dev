@@ -7450,10 +7450,11 @@ subroutine mpas_dmpar_get_exch_list(haloLayer, ownedListField, neededListField, 
 !>  exchange is complete.
 !
 !-----------------------------------------------------------------------
-   subroutine mpas_dmpar_exch_group_full_halo_exch(domain, groupName, iErr)!{{{
+   subroutine mpas_dmpar_exch_group_full_halo_exch(domain, groupName, withGPUAwareMPI, iErr)!{{{
 
       type (domain_type), intent(inout) :: domain
       character (len=*), intent(in) :: groupName
+      logical, optional, intent(in) :: withGPUAwareMPI
       integer, optional, intent(out) :: iErr
 
       type (mpas_exchange_group), pointer :: exchGroupPtr
@@ -7461,6 +7462,12 @@ subroutine mpas_dmpar_get_exch_list(haloLayer, ownedListField, neededListField, 
 
       if ( present(iErr) ) then
          iErr = MPAS_DMPAR_NOERR
+      end if
+
+      if (present(withGPUAwareMPI)) then
+        if (withGPUAwareMPI) then
+           call mpas_log_write(' GPU-aware MPI not implemented in this module', MPAS_LOG_CRIT)
+        end if
       end if
 
       nLen = len_trim(groupName)
