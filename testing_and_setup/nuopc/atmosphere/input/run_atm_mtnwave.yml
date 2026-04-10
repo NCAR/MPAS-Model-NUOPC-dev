@@ -1,0 +1,27 @@
+########################################################
+####  ESMX_Data <-> mpas_atmosphere Configuration  #####
+########################################################
+
+ESMX:
+  App:
+    globalResourceControl:  true
+    logKindFlag:            ESMF_LOGKIND_Multi
+    logAppendFlag:          false
+    logFlush:               true
+    fieldDictionary:        fd_mpas.yml
+    startTime:              0000-01-01T00:00:00
+    stopTime:               0000-01-01T05:00:00
+  Driver:
+    componentList:          [ATM]
+    attributes:
+      Verbosity: low
+    runSequence: |
+      @6
+        ATM
+      @
+
+ATM:
+  model: mpas_atmosphere
+  petList:          [0-3]
+  attributes:
+    Verbosity: low

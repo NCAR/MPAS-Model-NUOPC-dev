@@ -42,6 +42,7 @@ dycore: $(AUTOCLEAN_DEPS) build_tools externals frame ops
 
 nuopc_lib: $(AUTOCLEAN_DEPS) externals frame ops dycore drver
 	cp framework/*.mod $(MPAS_MODDIR)/.
+	cp driver/*.mod $(MPAS_MODDIR)/.
 	( cd core_$(CORE); $(MAKE) CPPFLAGS="$(CPPFLAGS)" CPPINCLUDES="$(CPPINCLUDES)" FFLAGS="$(FFLAGS)" FCINCLUDES="$(FCINCLUDES)" nuopc )
 	ar rcs $(MPAS_LIBDIR)/libmpas_nuopc.a \
 		core_$(CORE)/nuopc/*.o \

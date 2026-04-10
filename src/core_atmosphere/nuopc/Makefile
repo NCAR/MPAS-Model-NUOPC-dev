@@ -12,5 +12,4 @@ clean:
 
 %.o: %.F90
 	$(RM) $@ $*.mod
-	$(FC) $(CPPFLAGS) $(PHYSICS) $(FFLAGS) -c $< -o $@ $(CPPINCLUDES) $(FCINCLUDES) $(MPAS_ESMF_INC)
-
+	$(FC) $(CPPFLAGS) $(PHYSICS) $(FFLAGS) -c $< -o $@ -I$(MPAS_MODDIR) -I.. $(CPPINCLUDES) $(FCINCLUDES) $(MPAS_ESMF_INC)
