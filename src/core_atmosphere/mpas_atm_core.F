@@ -602,11 +602,62 @@ module atm_core
    
    
    function atm_core_run(domain) result(ierr)
+
+      use mpas_timekeeping
+      use mpas_kind_types
+
+      implicit none
    
+      type (domain_type), intent(inout) :: domain
+      integer :: ierr
+
+      integer :: itimestep
+      type (MPAS_Time_Type) :: currTime
+      character(len=StrKIND) :: timeStamp
+      real (kind=RKIND) :: dt
+      character (len=StrKIND), pointer :: config_restart_timestamp_name
+      logical, pointer :: config_apply_lbcs
+
+      ierr = 0
+
+      clock => domain % clock
+
+      ierr = atm_core_run_prepare(domain)
+      if (ierr /= 0) then
+         call mpas_log_write('********************************************************************************', messageType=MPAS_LOG_ERR)
+         call mpas_log_write('Model run prep failed.',                                                           messageType=MPAS_LOG_ERR)
+         call mpas_log_write('********************************************************************************', messageType=MPAS_LOG_CRIT)
+         return
+      end if
+
+      call mpas_get_timeInterval(mpas_get_clock_timestep(clock, ierr), dt=dt)
+      call mpas_pool_get_config(domain % blocklist % configs, 'config_restart_timestamp_name', config_restart_timestamp_name)
+      call mpas_pool_get_config(domain % blocklist % configs, 'config_apply_lbcs', config_apply_lbcs)
+
+      ! During integration, time level 1 stores the model state at the beginning of the
+      !   time step, and time level 2 stores the state advanced dt in time by timestep(...)
+      itimestep = 1
+      do while (.not. mpas_is_clock_stop_time(clock))
+         ierr = atm_core_run_step(domain, itimestep, dt, config_restart_timestamp_name, config_apply_lbcs)
+         if (ierr /= 0) then
+            currTime = mpas_get_clock_time(clock, MPAS_NOW, ierr)
+            call mpas_get_time(curr_time=currTime, dateTimeString=timeStamp)
+            call mpas_log_write('********************************************************************************', messageType=MPAS_LOG_ERR)
+            call mpas_log_write('Model time step failed at or before '//trim(timeStamp),                            messageType=MPAS_LOG_ERR)
+            call mpas_log_write('********************************************************************************', messageType=MPAS_LOG_CRIT)
+            return
+         end if
+      end do
+
+   end function atm_core_run
+
+
+   function atm_core_run_prepare(domain) result(ierr)
+
       use mpas_timekeeping
       use mpas_kind_types
       use mpas_stream_manager
-      use mpas_derived_types, only : MPAS_STREAM_LATEST_BEFORE, MPAS_STREAM_INPUT, MPAS_STREAM_INPUT_OUTPUT
+      use mpas_derived_types, only : MPAS_STREAM_INPUT
       use mpas_timer, only : mpas_timer_start, mpas_timer_stop
       use mpas_atm_boundaries, only : mpas_atm_update_bdy_tend
       use mpas_atm_diagnostics_manager, only : mpas_atm_diag_update, mpas_atm_diag_compute, mpas_atm_diag_reset
@@ -623,19 +674,11 @@ module atm_core
 
       type (MPAS_Time_Type) :: currTime
       character(len=StrKIND) :: timeStamp
-      character (len=StrKIND), pointer :: config_restart_timestamp_name
-      integer :: itimestep
-      integer :: iounit
 
-      integer :: stream_dir
-      character(len=StrKIND) :: input_stream, read_time
-
-      type (mpas_pool_type), pointer :: state, diag, mesh, diag_physics, tend, tend_physics
+      type (mpas_pool_type), pointer :: state, diag, mesh, diag_physics
 
       ! For timing information
-      real (kind=R8KIND) :: integ_start_time, integ_stop_time
       real (kind=R8KIND) :: diag_start_time, diag_stop_time
-      real (kind=R8KIND) :: input_start_time, input_stop_time
       real (kind=R8KIND) :: output_start_time, output_stop_time
       
       ierr = 0
@@ -645,7 +688,6 @@ module atm_core
       
       call mpas_get_timeInterval(mpas_get_clock_timestep(clock, ierr), dt=dt)
       call mpas_pool_get_config(domain % blocklist % configs, 'config_do_restart', config_do_restart)
-      call mpas_pool_get_config(domain % blocklist % configs, 'config_restart_timestamp_name', config_restart_timestamp_name)
 
       ! Avoid writing a restart file at the initial time
       call MPAS_stream_mgr_reset_alarms(domain % streamManager, streamID='restart', direction=MPAS_STREAM_OUTPUT, ierr=ierr)
@@ -732,10 +774,52 @@ module atm_core
          end do
       end if
 
-      ! During integration, time level 1 stores the model state at the beginning of the
-      !   time step, and time level 2 stores the state advanced dt in time by timestep(...)
-      itimestep = 1
-      do while (.not. mpas_is_clock_stop_time(clock))
+   end function atm_core_run_prepare
+
+
+   function atm_core_run_step(domain, itimestep, dt, config_restart_timestamp_name, config_apply_lbcs) result(ierr)
+
+      use mpas_timekeeping
+      use mpas_kind_types
+      use mpas_stream_manager
+      use mpas_derived_types, only : MPAS_STREAM_LATEST_BEFORE, MPAS_STREAM_INPUT, MPAS_STREAM_INPUT_OUTPUT
+      use mpas_timer, only : mpas_timer_start, mpas_timer_stop
+      use mpas_atm_boundaries, only : mpas_atm_update_bdy_tend
+      use mpas_atm_diagnostics_manager, only : mpas_atm_diag_update, mpas_atm_diag_compute, mpas_atm_diag_reset
+
+      implicit none
+
+      type (domain_type), intent(inout) :: domain
+      integer, intent(inout) :: itimestep
+      real (kind=RKIND), intent(in) :: dt
+      character (len=StrKIND), pointer, intent(in) :: config_restart_timestamp_name
+      logical, pointer, intent(in) :: config_apply_lbcs
+      integer :: ierr
+
+      type (block_type), pointer :: block_ptr
+
+      type (MPAS_Time_Type) :: currTime
+      character(len=StrKIND) :: timeStamp
+
+      integer :: iounit
+
+      integer :: stream_dir
+      character(len=StrKIND) :: input_stream, read_time
+
+      type (mpas_pool_type), pointer :: state, diag, mesh, diag_physics, tend, tend_physics
+
+      ! For timing information
+      real (kind=R8KIND) :: integ_start_time, integ_stop_time
+      real (kind=R8KIND) :: diag_start_time, diag_stop_time
+      real (kind=R8KIND) :: input_start_time, input_stop_time
+      real (kind=R8KIND) :: output_start_time, output_stop_time
+
+      ierr = 0
+
+      clock => domain % clock
+      mpas_log_info => domain % logInfo
+
+      ! Previously this was in atm_core_run loop
 
          currTime = mpas_get_clock_time(clock, MPAS_NOW, ierr)
          call mpas_get_time(curr_time=currTime, dateTimeString=timeStamp, ierr=ierr)         
@@ -891,11 +975,8 @@ module atm_core
          call mpas_timer_stop('diagnostic_fields')
 
          call mpas_stream_mgr_reset_alarms(domain % streamManager, direction=MPAS_STREAM_OUTPUT, ierr=ierr)
-
-      end do
    
-   end function atm_core_run
-
+   end function atm_core_run_step
    
    subroutine atm_compute_output_diagnostics(state, time_lev, diag, mesh)
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
