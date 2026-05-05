@@ -24,6 +24,7 @@
  private
  public:: driver_lsm_noahmp
 
+ logical :: debug
 
  contains
 
@@ -254,9 +255,7 @@
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
  ! Hydro
  call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt)
- ! sfcheadrt is all 0s the first time
- ! print *, "mpas mesh sfcrunoff", sfcheadrt
- ! stop "investigating"
+ if (debug) print *, "mpas mesh sfcrunoff", sfcheadrt
 
  do i = its,ite
     mpas_noahmp%tsk(i)       = skintemp(i)
@@ -286,8 +285,6 @@
     ! mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
  enddo
 
- ! print *, "smois ============", smois(1:2, 1:10)
- ! stop "==="
  do ns = 1,nsoil
     do i = its,ite
        mpas_noahmp%sh2o(i,ns)    = sh2o(ns,i)
@@ -715,7 +712,6 @@
  nsoil = mpas_noahmp%nsoil
  nsnow = mpas_noahmp%nsnow
  nzsnow = nsnow + nsoil
- print *, "mpash its ite", its, ite
 
 !--- update of INOUT variables (with generic LSM equivalent as defined in WRF), i.e. see
 !    lines 162-184 in module NoahmpIOVarType.F90):
@@ -746,7 +742,7 @@
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
 ! Hydro
  call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt )
- print *, "sfcheadrt from mpas pool shape", shape(sfcheadrt)
+ if (debug) print *, "sfcheadrt from mpas pool shape", shape(sfcheadrt)
 
  do i = its,ite
     skintemp(i)   = mpas_noahmp%tsk(i)
@@ -1097,16 +1093,16 @@
                           state,time_lev,itimestep)
 
 ! #1  0x430e83 in __mpas_atmphys_driver_MOD_physics_driver
-!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/physics/mpas_atmphys_driver.F:296
+!         at mpas-hydro-noahmp/src/mpas/src/core_atmosphere/physics/mpas_atmphys_driver.F:296
 ! #2  0x41e179 in __atm_core_MOD_atm_do_timestep
-!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:1099
+!         at mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:1099
 ! #3  0x41effe in __atm_core_MOD_atm_core_run_advance
-!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:826
+!         at mpas-hydro-noahmp/src/mpas/src/core_atmosphere/mpas_atm_core.F:826
 ! #4  0x414383 in advance
-!         at /glade/derecho/scratch/soren/src/wrf-hydro/mpas_testcases/mpas-hydro-noahmp/src/mpas/src/core_atmosphere/couple/nuopc/mpas_atm_nuopc.F90:565
+!         at mpas-hydro-noahmp/src/mpas/src/core_atmosphere/couple/nuopc/mpas_atm_nuopc.F90:565
 
  ! we pass its and ite in but lates get it from mpas_noahmp??
- print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
+ if (debug) print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
 
  if (mpas_noahmp%sfcheadrt_import_l) then
     mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
@@ -1124,12 +1120,11 @@
     mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
  end if
 
- ! print *, "pre NoahmpDriverMain(mpas_noahmp) infxsrt =", &
- !      mpas_noahmp%infxsrt(40:50)
  call NoahmpDriverMain(mpas_noahmp)
 
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
 
+ ! this isn't exported?
  ! if (mpas_noahmp%sfcheadrt_import_l) then
  !    mpas_noahmp%sfcheadrt_buf(its:ite) = mpas_noahmp%sfcheadrt(its:ite)
  ! end if

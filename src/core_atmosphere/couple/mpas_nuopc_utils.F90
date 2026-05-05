@@ -83,11 +83,19 @@ contains
     if (res .eqv. .true.) error stop "Bad Check, msg = " // ESMF_LOGERR_PASSTHRU
   end function check
 
-  subroutine printa(msg)
+  subroutine printa(msg, debug)
     character(len=*), intent(in) :: msg
+    logical, intent(in), optional :: debug
+    logical :: print_to_terminal
     integer :: rc
     logical :: rc_l
-    print *, "MPAS: ", trim(msg)
+    if (present(debug)) then
+       print_to_terminal = debug
+    else
+       print_to_terminal = .false.
+    end if
+
+    if (print_to_terminal) print *, "MPAS: ", trim(msg)
     call ESMF_LogWrite("MPAS: "//trim(msg), ESMF_LOGMSG_INFO, rc=rc)
     rc_l = check(rc, __LINE__, file)
     ! TODO: FIX RC_L TYPE

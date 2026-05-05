@@ -150,11 +150,11 @@ contains
 
     call MPI_Initialized(flag, ierr)
 
-    if (flag .eqv. .true.) then
-       print *, "MPI is already initialized."
-    else
-       print *, "MPI is NOT initialized."
-    end if
+    ! if (flag .eqv. .true.) then
+    !    print *, "MPI is already initialized."
+    ! else
+    !    print *, "MPI is NOT initialized."
+    ! end if
 
     call ESMF_LogWrite("MPAS: calling mpas_init", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
@@ -166,10 +166,7 @@ contains
       mpiCommunicator=EXTERNAL_COMM_WORLD, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    print *, "MPAS: rank =", rank
     if (rank == 0) io_rank = .true.
-
-
     call mpas_init(corelist, domain, external_comm=EXTERNAL_COMM_WORLD)
     call ESMF_LogWrite("MPAS: finished mpas_init", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
@@ -191,7 +188,7 @@ contains
     call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    print *, "MPAS: Exiting Advertise"
+    call printa("MPAS: Exiting Advertise")
     call ESMF_LogWrite("MPAS: exiting Advertise", ESMF_LOGMSG_INFO, rc=rc)
 
   end subroutine Advertise
@@ -461,7 +458,9 @@ contains
          state, diag, diag_physics, mesh, input_start_time, &
          input_stop_time, output_start_time, output_stop_time, &
          config_apply_lbcs, currTime, timestamp, itimestep)
-    print *, "atm_core_run_start ierr =", ierr
+    if (ierr /= 0) then
+       print *, "WARNING atm_core_run_start ierr =", ierr
+    end if
 
     call ESMF_LogWrite("MPAS: exiting SetClock", ESMF_LOGMSG_INFO, rc=rc)
   end subroutine SetClock
