@@ -16,6 +16,7 @@ import argparse
 import tarfile
 import zipfile
 import tempfile
+import filecmp
 import urllib.request
 import urllib.error
 import configparser
@@ -75,10 +76,11 @@ def run_command(cmd, cwd, env, log_file):
 class MPASBuild:
     """Class to manage MPAS build execution."""
 
-    def __init__(self, buildroot, compiler, bldtsks, logfile):
+    def __init__(self, buildroot, compiler, bldtsks, debug, logfile):
         self.buildroot = buildroot
         self.compiler = compiler
         self.bldtsks = bldtsks
+        self.debug = debug
         self.logfile = logfile
 
     def clean(self):
@@ -94,8 +96,11 @@ class MPASBuild:
     def build(self):
         """Build MPAS Atmosphere with NUOPC support."""
 
+        settings = f'CORE="atmosphere" NUOPC="true"'
+        if self.debug:
+            settings += ' DEBUG="true"'
         return run_command(
-            f'make {self.compiler} -j {self.bldtsks} CORE="atmosphere" NUOPC="true"',
+            f'make {self.compiler} -j {self.bldtsks} {settings}',
             self.buildroot,
             os.environ.copy(),
             self.logfile
@@ -105,11 +110,15 @@ class MPASBuild:
 class ESMXBuild:
     """Class to manage ESMX build execution."""
 
-    def __init__(self, buildroot, esmxcfg, esmxexe, logfile):
+    def __init__(self, buildroot, compiler, bldtmplt, bldopts, esmxexe,
+                 debug, logfile):
         self.buildroot = buildroot
         self.builddir = buildroot / "build"
         self.installdir = buildroot / "install"
-        self.esmxcfg = esmxcfg
+        self.compiler = compiler
+        self.bldtmplt = bldtmplt
+        self.bldopts = bldopts
+        self.debug = debug
         self.esmxexe = buildroot / "install" / "bin" / esmxexe
         self.logfile = logfile
 
@@ -127,12 +136,32 @@ class ESMXBuild:
     def build(self):
         """Build ESMX executable using ESMX_Builder."""
 
-        return run_command(
-            f'ESMX_Builder {self.esmxcfg}',
-            self.buildroot,
-            os.environ.copy(),
-            self.logfile
-        )
+        if not self.bldtmplt.exists():
+            print(f"✗ ESMX build template missing: {self.bldtmplt}")
+            return {'success': False, 'elapsed': 0}
+        with open(self.bldtmplt, 'r') as f:
+            esmx_bld = f.read()
+        for key, value in self.bldopts.items():
+            esmx_bld = esmx_bld.replace(f'{{{{ {key} }}}}', str(value))
+        if '{{' in esmx_bld or '}}' in esmx_bld:
+            print(f"✗ ESMX build template missing options")
+            return {'success': False, 'elapsed': 0}
+
+        cmake_args = '-DCMAKE_LINK_WHAT_YOU_USE=TRUE'
+        if self.debug:
+            cmake_args += ' -DCMAKE_BUILD_TYPE=Debug'
+        if self.compiler == "gnu":
+            cmake_args += ' -DCMAKE_Fortran_FLAGS=-fconvert=big-endian'
+
+        with tempfile.NamedTemporaryFile() as tmp:
+            tmp.write(esmx_bld.encode())
+            tmp.flush()
+            return run_command(
+                f'ESMX_Builder -v {tmp.name} --cmake-args="{cmake_args}"',
+                self.buildroot,
+                os.environ.copy(),
+                self.logfile
+            )
 
 
 class Input:
@@ -212,11 +241,17 @@ class Input:
 
         stripped_files = []
         for member in archive.getmembers():
-            p = Path(member.path)
+            # Get the path: 'name' for tarfile.TarInfo, 'filename' for zipfile.ZipInfo
+            member_path = member.name if hasattr(member, 'name') else member.filename
+            p = Path(member_path)
             if len(p.parts) > level:
                 stripped_path = Path(*p.parts[level:])
                 if not stripped_path.is_absolute() and not stripped_path.match('..*'):
-                    member.path = str(stripped_path)
+                    # Set the path: 'name' for tarfile.TarInfo, 'filename' for zipfile.ZipInfo
+                    if hasattr(member, 'name'):
+                        member.name = str(stripped_path)
+                    else:
+                        member.filename = str(stripped_path)
                     stripped_files.append(member)
         return stripped_files
 
@@ -342,14 +377,118 @@ class Input:
             )
 
 
+class Check:
+    """Class to represent a check file"""
+    valid_options = ['type', 'file1', 'file2', 'tolerance']
+
+    def __init__(self, check_spec: dict):
+
+        for key in check_spec.keys():
+            if not key in Check.valid_options:
+                raise ValueError(f"Check includes unknown key '{key}'")
+        self.type = check_spec.get('type', 'exists')
+        if 'file1' not in check_spec:
+            raise ValueError(f"Check requires 'file1' key")
+        self.file1 = Path(check_spec.get('file1'))
+        if 'file2' in check_spec:
+            self.file2 = Path(check_spec.get('file2'))
+        else:
+            self.file2 = None
+        if self.type.startswith('diff'):
+            if self.file2 is None:
+                raise ValueError(f"Check requires 'file2' key")
+
+        if self.type == 'exists':
+            self.execute = self._exists_check
+        elif self.type == 'diff':
+            if self.file1.suffix == '.nc':
+                self.execute = self._diffnc_check
+            else:
+                self.execute = self._diffcmp_check
+        elif self.type == 'diff-cmp':
+            self.execute = self._diffcmp_check
+        elif self.type == 'diff-nc':
+            self.execute = self._diffnc_check
+        else:
+            raise ValueError(
+                f"Unknown check type: {self.type}. "
+                "Supported types: 'exists', 'diff','diff-cmp', 'diff-nc'"
+            )
+        self.tolerance = float(check_spec.get('tolerance', 0.0))
+
+    def _exists_check(self, rundir, diffnc):
+        """Perform an existence check for the file."""
+        if (Path(rundir) / self.file1).exists():
+            return True
+        else:
+            raise FileNotFoundError(f"file1 missing: {self.file1}")
+
+    def _diffcmp_check(self, rundir, diffnc):
+        """Perform a diff-cmp check against the baseline file."""
+
+        if not (Path(rundir) / self.file1).exists():
+            raise FileNotFoundError(f"file1 missing: {self.file1}")
+        if not (Path(rundir) / self.file2).exists():
+            raise FileNotFoundError(f"file2 missing: {self.file2}")
+
+        cmp = filecmp.cmp(
+            Path(rundir) / self.file1, Path(rundir) / self.file2, shallow=False
+        )
+        if cmp:
+            return True
+        else:
+            raise ValueError(f"cmp check failed: {self.file1}")
+
+    def _diffnc_check(self, rundir, diffnc):
+        """Perform an diff-nc check against the baseline file."""
+
+        if not (Path(rundir) / self.file1).exists():
+            raise FileNotFoundError(f"file1 missing: {self.file1}")
+        if not (Path(rundir) / self.file2).exists():
+            raise FileNotFoundError(f"file2 missing: {self.file2}")
+
+        if diffnc is None:
+            raise ValueError(
+                f"Missing diff-nc utility. "
+                f"Supported utilities: 'nccmp', 'cdo'"
+            )
+        elif diffnc == 'nccmp':
+            cmd = [
+                'nccmp', '-dq', '-t', f'{self.tolerance}',
+                str(Path(rundir) / self.file1),
+                str(Path(rundir) / self.file2)
+            ]
+        elif diffnc == 'cdo':
+            cmd = [
+                'cdo', '-s', '-w', f'diff,abslim={self.tolerance}',
+                str(Path(rundir) / self.file1),
+                str(Path(rundir) / self.file2)
+            ]
+        else:
+            raise ValueError(
+                f"Unknown diff-nc utility: {diffnc}. "
+                f"Supported utilities: 'nccmp', 'cdo'"
+            )
+
+        diff_ret = subprocess.run(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        if diff_ret.returncode == 0:
+            return True
+        else:
+            raise ValueError(f"{diffnc} check failed: {self.file1}")
+
 class ESMXTest:
     """Class to manage ESMX run execution."""
 
-    def __init__(self, name, rundir, esmxcfg, runinputs, mpitsks, logfile):
+    def __init__(
+        self, name, rundir, esmxcfg, runinputs, runchecks, mpitsks, logfile
+    ):
         self.name = name
         self.rundir = rundir
         self.esmxcfg = esmxcfg
         self.runinputs = runinputs
+        self.runchecks = runchecks
         self.mpitsks = int(mpitsks)
         self.logfile = logfile
 
@@ -399,6 +538,36 @@ class ESMXTest:
 
         return run_ret
 
+    def check(self, diffnc=None):
+        """Check run for ESMX execution."""
+
+        start_time = time.time()
+
+        # Execute checks
+        logfile = open(self.logfile, 'a')
+        print(f'\nPerforming checks...', file=logfile)
+        total = 0
+        failed = 0
+        for check in self.runchecks:
+            total += 1
+            try:
+                result = check.execute(rundir=self.rundir, diffnc=diffnc)
+                if result:
+                    print(f"✓ Check {total} succeeded", file=logfile)
+                else:
+                    print(f"✗ Check {total} failed", file=logfile)
+                    failed += 1
+            except Exception as e:
+                print(f"✗ Check {total} failed: {e}", file=logfile)
+                failed += 1
+        if failed > 0:
+            print(f'✗ Checks failed: {failed}/{total}', file=logfile)
+        else:
+            print(f'✓ All Checks succeeded: {total}', file=logfile)
+        logfile.close()
+        elapsed = int(time.time() - start_time)
+        return {'success': failed == 0, 'elapsed': elapsed}
+
 
 def load_tests_from_config(config):
     """Load test configurations from INI file.
@@ -431,6 +600,7 @@ def load_tests_from_config(config):
             esmxcfg = parser.get(section, 'esmxcfg')
             mpitsks = parser.getint(section, 'mpitsks', fallback=4)
             runinputs_str = parser.get(section, 'runinputs', fallback='')
+            runchecks_str = parser.get(section, 'runchecks', fallback='')
         except ValueError as e:
             print(f"✗ Invalid configuration value in '{section}': {e}")
             elapsed = int(time.time() - start_time)
@@ -456,20 +626,53 @@ def load_tests_from_config(config):
                     elapsed = int(time.time() - start_time)
                     return {'success': False, 'elapsed': elapsed}, tests
 
+        # Parse runchecks as JSON list of dictionaries
+        runchecks_list = []
+        for line in runchecks_str.splitlines():
+            if line.strip():
+                try:
+                    runchecks_list.append(Check(json.loads(line)))
+                except json.JSONDecodeError as e:
+                    print(f"✗ Failed to parse runchecks in {section}")
+                    print(f"  Error on line: {line}")
+                    elapsed = int(time.time() - start_time)
+                    return {'success': False, 'elapsed': elapsed}, tests
+                except Exception as e:
+                    print(f"✗ Failed to parse runchecks in {section}")
+                    print(f"  Error on line: {line}")
+                    print(f"  {e}")
+                    elapsed = int(time.time() - start_time)
+                    return {'success': False, 'elapsed': elapsed}, tests
+
         # Create ESMXTest object
         test = ESMXTest(
             name=name,
             rundir=config['rundir'] / rundir_name,
             esmxcfg=esmxcfg,
             runinputs=runinputs_list,
+            runchecks=runchecks_list,
             mpitsks=mpitsks,
             logfile=config['logdir'] / f"run_{name}.log"
         )
         tests.append(test)
 
-
     elapsed = int(time.time() - start_time)
     return {'success': True, 'elapsed': elapsed}, tests
+
+
+def resolve_diffnc_utility(preferred=None):
+    """Resolve the diff-nc utility to use, if any."""
+
+    if preferred is not None:
+        if shutil.which(preferred) is None:
+            raise ValueError(f"diff-nc utility not found: {preferred}")
+        return preferred
+
+    if shutil.which("nccmp") is not None:
+        return 'nccmp'
+    if shutil.which("cdo") is not None:
+        return 'cdo'
+    return None
 
 
 def main():
@@ -484,6 +687,9 @@ def main():
         parser.add_argument("--build-tasks", "-j",
             type=int, default=4,
             help="Number of build tasks for MPAS make (default: 4)",)
+        parser.add_argument("--debug",
+            action="store_true", default=False,
+            help="Enable debug mode for builds (default: False)",)
         parser.add_argument("--clean-first", "-k",
             action="store_true", default=False,
             help="Clean before executing tests (default: False)",)
@@ -493,34 +699,73 @@ def main():
         parser.add_argument("--failure-level", "-L",
             type=int, default=1,
             help="Failure level for the tests, higher is stricter (default: 1)",)
+        parser.add_argument("--no-checks", "-C",
+            action="store_true", default=False,
+            help="Run tests without performing checks (default: False)",)
+        parser.add_argument("--diff-nc",
+            type=str, choices=['nccmp', 'cdo'], default=None,
+            help="diff-nc utility (choices: 'nccmp', 'cdo', default: None)",)
         parser.add_argument("--test-config", "-t",
             type=str, default="all_tests.ini",
             help="Test configuration file (default: all_tests.ini)",)
+        parser.add_argument("--pio", "-p",
+            action="store_true", default=False,
+            help="Include PIO in the build (default: False)",)
         args = parser.parse_args()
 
         config = {}
+        config['bldopts'] = {}
+        config['bldopts']['link_libraries'] = "pnetcdf;"
         config['curdir'] = Path(__file__).parent.resolve()
         config['mpasdir'] = config['curdir'].resolve().parent.parent.parent
         config['logdir'] = config['curdir'] / "logs"
         config['rundir'] = config['curdir'] / "run"
+        config['bldtmplt'] = config['curdir'] / "templates" / "esmx_build.yml"
         config['compiler'] = args.compiler
         config['bldtsks'] = args.build_tasks
         config['faillvl'] = args.failure_level
+        config['checks'] = not args.no_checks
         config['test_config'] = Path(args.test_config).resolve()
+        config['debug'] = args.debug
         if args.clean_only:
             config['clean'] = True
             config['execute'] = False
         else:
             config['clean'] = args.clean_first
             config['execute'] = True
+        if args.pio:
+            config['pio'] = True
+            if 'PIO' not in os.environ:
+                print(f"✗ Missing PIO environment variable")
+                raise ValueError("PIO environment variable required --pio")
+            config['bldopts']['link_libraries'] += "piof;pioc;"
+        else:
+            config['pio'] = False
+            os.environ.pop('PIO', None)
+        try:
+            config['diffnc'] = resolve_diffnc_utility(args.diff_nc)
+        except ValueError as e:
+            print(f"✗ {e}")
+            sys.exit(1)
+        if config['checks'] and config['diffnc'] is None:
+            print(
+                "✗ Checks are enabled but no diff-nc utility is available. "
+                "Install 'nccmp' or 'cdo', or disable checks with --no-checks."
+            )
+            sys.exit(1)
 
         print("=" * 80)
         print(f"MPAS NUOPC Atmosphere Tests (ESMX)")
         print(f"  Compiler:       {config['compiler']}")
         print(f"  Build Tasks:    {config['bldtsks']}")
+        print(f"  Debug:          {config['debug']}")
         print(f"  Clean:          {config['clean']}")
         print(f"  Failure Level:  {config['faillvl']}")
+        print(f"  Checks:         {config['checks']}")
+        print(f"  Diff NC Util:   {config['diffnc']}")
+        print(f"  PIO:            {config['pio']}")
         print(f"  MPAS Root:      {config['mpasdir']}")
+        print(f"  Build Template: {config['bldtmplt']}")
         print(f"  Test Config:    {config['test_config']}")
         print(f"  Log Directory:  {config['logdir']}")
         print(f"  Run Directory:  {config['rundir']}")
@@ -550,6 +795,7 @@ def main():
             buildroot=config['mpasdir'],
             compiler=config['compiler'],
             bldtsks=config['bldtsks'],
+            debug=config['debug'],
             logfile=config['logdir'] / "build_mpas.log")
 
         # run MPAS build
@@ -576,8 +822,11 @@ def main():
         # define ESMX build
         esmx_build = ESMXBuild(
             buildroot=config['curdir'],
-            esmxcfg=config['curdir'] / "esmx_build_atm.yml",
+            compiler=config['compiler'],
+            bldtmplt=config['bldtmplt'],
+            bldopts=config['bldopts'],
             esmxexe="esmx_mpas",
+            debug=config['debug'],
             logfile=config['logdir'] / "build_esmx.log")
 
         # run ESMX build
@@ -633,6 +882,16 @@ def main():
                     print(f"  see run directory: {test.rundir}")
                     failure_count += 1
                     continue
+                if config['checks']:
+                    test_check_ret = test.check(diffnc=config['diffnc'])
+                    if test_check_ret.get('success', False):
+                        print(f"✓ {test.name} checks succeeded: " +
+                              f"{test_check_ret['elapsed']} second(s)")
+                    else:
+                        print(f"✗ {test.name} checks failed")
+                        print(f"  see log file: {test.logfile}")
+                        failure_count += 1
+                        continue
 
         if failure_count > 0:
             print(f"\n{failure_count} test(s) failed. Please review logs and run directories for details.")

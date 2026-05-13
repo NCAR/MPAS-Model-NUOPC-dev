@@ -8,7 +8,7 @@ else
 
 BUILD_ALL = mpas
 ifeq "$(NUOPC)" "true"
-BUILD_ALL += nuopc_lib
+BUILD_ALL = nuopc_lib
 endif
 
 all: $(BUILD_ALL)
@@ -40,9 +40,21 @@ dycore: $(AUTOCLEAN_DEPS) build_tools externals frame ops
 	( cd core_$(CORE); $(MAKE) CPPFLAGS="$(CPPFLAGS)" CPPINCLUDES="$(CPPINCLUDES)" all ) 
 	ln -sf core_$(CORE)/libdycore.a libdycore.a
 
-nuopc_lib: mpas
+nuopc_lib: $(AUTOCLEAN_DEPS) externals frame ops dycore drver
+	cp framework/*.mod $(MPAS_MODDIR)/.
 	( cd core_$(CORE); $(MAKE) CPPFLAGS="$(CPPFLAGS)" CPPINCLUDES="$(CPPINCLUDES)" FFLAGS="$(FFLAGS)" FCINCLUDES="$(FCINCLUDES)" nuopc )
-	ar -ru $(MPAS_LIBDIR)/libmpas_nuopc.a libframework.a libops.a libdycore.a core_$(CORE)/nuopc/*.o
+	ar rcs $(MPAS_LIBDIR)/libmpas_nuopc.a \
+		core_$(CORE)/nuopc/*.o \
+		core_$(CORE)/libphys/*.o \
+		core_$(CORE)/*.o \
+		core_$(CORE)/diagnostics/*.o \
+		core_$(CORE)/libchem/*.o \
+		core_$(CORE)/dynamics/*.o \
+		driver/*.o \
+		framework/*.o \
+		operators/*.o \
+		external/ezxml/*.o \
+		external/SMIOL/*.o
 	ranlib $(MPAS_LIBDIR)/libmpas_nuopc.a
 	cp core_$(CORE)/nuopc/*.mod $(MPAS_MODDIR)/.
 

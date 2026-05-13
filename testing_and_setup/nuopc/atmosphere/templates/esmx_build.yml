@@ -1,5 +1,6 @@
 application:
   exe_name: esmx_mpas
+  link_libraries: {{ link_libraries }}
 
 components:
 
