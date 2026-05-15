@@ -390,7 +390,7 @@ FetchContent_Declare(mpas_data
                      GIT_TAG ${MPAS_DATA_GIT_TAG}
                      GIT_PROGRESS True
                      GIT_SHALLOW True)
-FetchContent_Populate(mpas_data)
+FetchContent_MakeAvailable(mpas_data)
 message(STATUS "MPAS-Data source dir: ${mpas_data_SOURCE_DIR}")
 set(PHYSICS_WRF_DATA_DIR ${mpas_data_SOURCE_DIR}/atmosphere/physics_wrf/files)
 file(GLOB PHYSICS_WRF_DATA RELATIVE ${PHYSICS_WRF_DATA_DIR} "${PHYSICS_WRF_DATA_DIR}/*")
