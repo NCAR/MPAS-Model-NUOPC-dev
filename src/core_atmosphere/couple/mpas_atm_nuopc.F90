@@ -14,6 +14,9 @@ module mpas_atm_nuopc
 
   private
 
+
+  logical, parameter :: debug = .false.
+
   ! NUOPC variables
   ! type(ESMF_State) :: importState, exportState
   type(ESMF_Grid)  :: mpas_grid
@@ -498,11 +501,12 @@ contains
          exportState=exportState, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
-    if (check(rc, __LINE__, file)) return
-    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
-    if (check(rc, __LINE__, file)) return
-
+    if (debug) then
+       call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+       if (check(rc, __LINE__, file)) return
+       call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+       if (check(rc, __LINE__, file)) return
+    end if
 
     ! this disappears after atm_core_run_advance
     ! mpas_noahmp%sfcrunoff(:) = -888

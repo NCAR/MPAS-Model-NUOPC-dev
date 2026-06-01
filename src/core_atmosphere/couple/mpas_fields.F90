@@ -289,8 +289,10 @@ contains
       exportState=exportState, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
-    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    if (debug) then
+       call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+       call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    end if
 
     do n=lbound(fieldList,1), ubound(fieldList,1)
        ! check realize import
