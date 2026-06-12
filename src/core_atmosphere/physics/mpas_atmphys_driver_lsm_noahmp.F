@@ -25,6 +25,9 @@
  public:: driver_lsm_noahmp
 
  logical :: debug
+ logical :: init_sh2o = .false.
+ logical :: init_smc = .false.
+ logical :: init_sfcheadrt = .false.
 
  contains
 
@@ -1105,19 +1108,28 @@
  if (debug) print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
 
  if (mpas_noahmp%sfcheadrt_import_l) then
-    mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
+    if (init_sfcheadrt) then
+       mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
+    end if
+    init_sfcheadrt = .true.
  end if
  if (mpas_noahmp%smc_import_l) then
-    mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
-    mpas_noahmp%smois(its:ite,2) = mpas_noahmp%smois2_buf(its:ite)
-    mpas_noahmp%smois(its:ite,3) = mpas_noahmp%smois3_buf(its:ite)
-    mpas_noahmp%smois(its:ite,4) = mpas_noahmp%smois4_buf(its:ite)
+    if (init_smc) then
+       mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
+       mpas_noahmp%smois(its:ite,2) = mpas_noahmp%smois2_buf(its:ite)
+       mpas_noahmp%smois(its:ite,3) = mpas_noahmp%smois3_buf(its:ite)
+       mpas_noahmp%smois(its:ite,4) = mpas_noahmp%smois4_buf(its:ite)
+    end if
+    init_smc = .true.
  end if
  if (mpas_noahmp%sh2o_import_l) then
-    mpas_noahmp%sh2o(its:ite,1) = mpas_noahmp%sh2o1_buf(its:ite)
-    mpas_noahmp%sh2o(its:ite,2) = mpas_noahmp%sh2o2_buf(its:ite)
-    mpas_noahmp%sh2o(its:ite,3) = mpas_noahmp%sh2o3_buf(its:ite)
-    mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
+    if (init_sh2o) then
+       mpas_noahmp%sh2o(its:ite,1) = mpas_noahmp%sh2o1_buf(its:ite)
+       mpas_noahmp%sh2o(its:ite,2) = mpas_noahmp%sh2o2_buf(its:ite)
+       mpas_noahmp%sh2o(its:ite,3) = mpas_noahmp%sh2o3_buf(its:ite)
+       mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
+    end if
+    init_sh2o = .true.
  end if
 
  call NoahmpDriverMain(mpas_noahmp)
