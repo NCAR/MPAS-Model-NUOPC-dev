@@ -517,7 +517,7 @@ contains
     ! stop "hi"
 
 
-    if (io_rank) print *, "MPAS: itimestep =", itimestep
+    if (io_rank .and. (mod(itimestep, 100) == 0)) print *, "MPAS: itimestep =", itimestep
     ! atm_core_run_advance takes a single timestep
     ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
          config_apply_lbcs, input_start_time, &
