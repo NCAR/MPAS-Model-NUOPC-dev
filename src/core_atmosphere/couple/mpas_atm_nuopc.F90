@@ -479,7 +479,7 @@ contains
     ! local variables
     type(ESMF_Clock)            :: clock
     type(ESMF_State)            :: importState, exportState
-    ! type(ESMF_Time)             :: currTime
+    type(ESMF_Time)             :: currTime
     ! type(ESMF_TimeInterval)     :: timeStep
     ! type(ESMF_VM)               :: vm
     ! integer                     :: currentSsiPe
@@ -494,8 +494,10 @@ contains
     real(ESMF_KIND_R8), pointer :: ptr(:)
 
     rc = ESMF_SUCCESS
-    call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
-    call ESMF_LogFlush(rc=rc)
+    if (debug) then
+       call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
+       call ESMF_LogFlush(rc=rc)
+    end if
 
     call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
          exportState=exportState, rc=rc)
@@ -537,6 +539,10 @@ contains
          exportState=exportState, rc=rc)
     if (check(rc, __LINE__, file)) return
 
+    !
+    ! call ESMF_ClockAdvance(clock, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
+
     ! ! Query for VM
     ! call ESMF_GridCompGet(model, vm=vm, rc=rc)
     ! if (check(rc, __LINE__, file)) return
@@ -576,6 +582,7 @@ contains
     ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     ! if (check(rc, __LINE__, file)) return
 
+    !
     ! call ESMF_ClockGet(clock, currTime=currTime, timeStep=timeStep, rc=rc)
     ! if (check(rc, __LINE__, file)) return
 
@@ -585,7 +592,9 @@ contains
 
     ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
     ! if (check(rc, __LINE__, file)) return
-    call ESMF_LogWrite("MPAS: exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
+    if (debug) then
+       call ESMF_LogWrite("MPAS: exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
+    end if
   end subroutine Advance
 
 
