@@ -28,6 +28,7 @@ module mpas_atm_nuopc
   ! mpas atm_core_run_start variables
   type (block_type), pointer :: block
   real (kind=RKIND), pointer :: dt
+  type(ESMF_TimeInterval)    :: mpasTimeStep
   logical, pointer :: config_do_restart
   character (len=StrKIND), pointer :: config_restart_timestamp_name
   real (kind=R8KIND) :: diag_start_time, diag_stop_time
@@ -411,17 +412,16 @@ contains
     ! initialize dt
     call mpas_pool_get_config(domain%blocklist%configs, 'config_dt', dt)
     dt_i = int(dt, kind=ESMF_KIND_I4)
-    call ESMF_TimeIntervalSet(timestep, s=dt_i, rc=rc) ! MPAS dt in seconds
+    call ESMF_TimeIntervalSet(mpasTimeStep, s=dt_i, rc=rc) ! MPAS dt in seconds
     if (check(rc, __LINE__, file)) return
-    call ESMF_ClockSet(clock, timeStep=timestep, rc=rc)
-    if (check(rc, __LINE__, file)) return
+    ! call ESMF_ClockSet(clock, timeStep=timestep, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
 
     ! ! initialize start time
     ! call mpas_pool_get_config(domain%blocklist%configs, 'config_start_time', startTime_s)
     ! print *, "starttime = ", trim(startTime_s)
     ! call ESMF_TimeSet(startTime, timeString=startTime_s, rc=rc)
     ! call ESMF_ClockSet(clock, startTime=startTime, rc=rc)
-
     ! ! initialize end time
     ! call mpas_pool_get_config(domain%blocklist%configs, 'config_run_duration', duration_s)
     ! call ESMF_TimeIntervalSet(duration, timeIntervalString=duration_s, rc=rc) ! MPAS dt in seconds
@@ -439,6 +439,22 @@ contains
     call ESMF_TimeIntervalGet(timestep, s=dt_sec, rc=rc)
     write(msg, '(A,I10)') 'ESMF timestep: ', dt_sec
     call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+    write(msg, '(A,I10)') 'MPAS timestep: ', dt_i
+    call ESMF_LogWrite(msg, ESMF_LOGMSG_INFO, rc=rc)
+
+    if (mpasTimeStep > timeStep) then
+       print *, "Error: MPAS timestep must be less than or equal to ESMX&
+            & timestep"
+       stop "MPAS namelist timestep greater than ESMX timestep"
+    end if
+
+
+    if (mod(dt_sec, dt_i) /= 0) then
+       print *, "Error: MPAS timestep must be an integer multiple of ESMX&
+            & timestep"
+       stop "MPAS namelist timestep not an integer multiple of ESMX timestep"
+    end if
+
 
     call ESMF_ClockGet(clock, currTime=currentTime, rc=rc)
     call ESMF_TimeGet(currentTime, timeString=dateString, rc=rc)
@@ -479,12 +495,15 @@ contains
     ! local variables
     type(ESMF_Clock)            :: clock
     type(ESMF_State)            :: importState, exportState
-    type(ESMF_Time)             :: currTime
-    ! type(ESMF_TimeInterval)     :: timeStep
+    type(ESMF_TimeInterval)     :: timeStep
     ! type(ESMF_VM)               :: vm
     ! integer                     :: currentSsiPe
     ! character(len=160)          :: msgString
+    integer(ESMF_KIND_I4) :: dt_i
     integer :: ierr
+
+    type(ESMF_Time)             :: currTime, advEndTime
+    character(len=32)           :: currTimeStr, advEndTimeStr, timeStepStr, mpasTimeStepStr
 
     ! stop "DEBUGGING CLOCKS, STOPPING IN MPAS ADVANCE"
     ! print *, "mpas_noahmp%sfcrunoff(1:4) =", mpas_noahmp%sfcrunoff(1:4)
@@ -494,6 +513,7 @@ contains
     real(ESMF_KIND_R8), pointer :: ptr(:)
 
     rc = ESMF_SUCCESS
+    call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
     if (debug) then
        call ESMF_LogWrite("MPAS: Advance", ESMF_LOGMSG_INFO, rc=rc)
        call ESMF_LogFlush(rc=rc)
@@ -512,86 +532,64 @@ contains
 
     ! this disappears after atm_core_run_advance
     ! mpas_noahmp%sfcrunoff(:) = -888
+
+    ! query the clock for its current time and timestep
+    call ESMF_ClockGet(clock, &
+      currTime=currTime, timeStep=timeStep, rc=rc)
+       if (check(rc, __LINE__, file)) return
+    advEndTime = currTime + timeStep
+
+    if (debug) then
+       ! get time strings
+       call ESMF_TimeIntervalGet(timeStep, timeString=timeStepStr, rc=rc)
+       if (check(rc, __LINE__, file)) return
+       call ESMF_TimeIntervalGet(mpasTimeStep, timeString=mpasTimeStepStr, rc=rc)
+       if (check(rc, __LINE__, file)) return
+       call ESMF_TimeGet(currTime, timeString=currTimeStr, rc=rc)
+       if (check(rc, __LINE__, file)) return
+       call ESMF_TimeGet(advEndTime, timeString=advEndTimeStr, rc=rc)
+       if (check(rc, __LINE__, file)) return
+       print *, "currTime =", currTimeStr
+       print *, "advEndTime =", advEndTimeStr
+       print *, "timeStepStr = ", timeStepStr
+       print *, "mpastimeStepStr = ", mpasTimeStepStr
+       print *, "dt =", dt
+    end if
+
+    ! if (io_rank) print *, "MPAS: set soldrain to 0"
+    ! mpas_noahmp%soldrain(:) = 0
     ! this prints -888
     ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
     ! stop "hi"
 
-
-    if (io_rank .and. (mod(itimestep, 100) == 0)) print *, "MPAS: itimestep =", itimestep
     ! atm_core_run_advance takes a single timestep
-    ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
-         config_apply_lbcs, input_start_time, &
-         input_stop_time, output_start_time, output_stop_time, &
-         input_stream, read_time, stream_dir, &
-         integ_start_time, integ_stop_time, &
-         diag_start_time, diag_stop_time, &
-         dt, itimestep, state, mesh, diag, diag_physics, &
-         tend, tend_physics, config_restart_timestamp_name)
-    if (ierr /= 0) then
-       print *, "atm_core_run_advance ierr =", ierr
-       error stop "atm_core_run_advance ierr != 0"
-    end if
-    ! call ESMF_LogWrite("finished mpas_run", ESMF_LOGMSG_INFO, rc=rc)
+    do while (currTime < advEndTime)
+       if (io_rank .and. (mod(itimestep, 100) == 0)) &
+            print *, "MPAS: itimestep =", itimestep
 
+       ierr = atm_core_run_advance(domain, timestamp, block_ptr, &
+            config_apply_lbcs, input_start_time, &
+            input_stop_time, output_start_time, output_stop_time, &
+            input_stream, read_time, stream_dir, &
+            integ_start_time, integ_stop_time, &
+            diag_start_time, diag_stop_time, &
+            dt, itimestep, state, mesh, diag, diag_physics, &
+            tend, tend_physics, config_restart_timestamp_name)
+       if (ierr /= 0) then
+          print *, "atm_core_run_advance ierr =", ierr
+          error stop "atm_core_run_advance ierr != 0"
+       end if
+       currTime = currTime + mpasTimeStep
+    end do
 
     ! query for clock, importState and exportState
     call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
          exportState=exportState, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    !
-    ! call ESMF_ClockAdvance(clock, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
+    call ESMF_ClockAdvance(clock, rc=rc)
+    if (check(rc, __LINE__, file)) return
 
-    ! ! Query for VM
-    ! call ESMF_GridCompGet(model, vm=vm, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-
-    ! call ESMF_VMLog(vm, prefix="LUMO Advance(): ", &
-    !      logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-
-    ! ! Now can use OpenMP for fine grained parallelism...
-    ! ! Here just write info about the PET-local OpenMP threads to Log.
-    ! !$omp parallel private(msgString, currentSsiPe)
-    ! !$omp critical
-    ! !$    call ESMF_VMGet(vm, currentSsiPe=currentSsiPe)
-    ! !$    write(msgString,'(A,I4,A,I4,A,I4,A,I4,A,I4)') &
-    ! !$      "thread_num=", omp_get_thread_num(), &
-    ! !$      "   currentSsiPe=", currentSsiPe, &
-    ! !$      "   num_threads=", omp_get_num_threads(), &
-    ! !$      "   max_threads=", omp_get_max_threads(), &
-    ! !$      "   num_procs=", omp_get_num_procs()
-    ! !$    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    ! !$omp end critical
-    ! !$omp end parallel
-
-    ! ! HERE THE MODEL ADVANCES: currTime -> currTime + timeStep
-
-    ! ! Because of the way that the internal Clock was set in SetClock(),
-    ! ! its timeStep is likely smaller than the parent timeStep. As a consequence
-    ! ! the time interval covered by a single parent timeStep will result in
-    ! ! multiple calls to the Advance() routine. Every time the currTime
-    ! ! will come in by one internal timeStep advanced. This goes until the
-    ! ! stopTime of the internal Clock has been reached.
-
-    ! call ESMF_ClockPrint(clock, options="currTime", &
-    !      preString="------>Advancing LUMO from: ", unit=msgString, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-
-    ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-
-    !
-    ! call ESMF_ClockGet(clock, currTime=currTime, timeStep=timeStep, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-
-    ! call ESMF_TimePrint(currTime + timeStep, &
-    !      preString="---------------------> to: ", unit=msgString, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
-
-    ! call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    ! if (check(rc, __LINE__, file)) return
     if (debug) then
        call ESMF_LogWrite("MPAS: exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
     end if

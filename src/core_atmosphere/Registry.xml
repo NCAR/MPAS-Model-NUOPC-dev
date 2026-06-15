@@ -1022,8 +1022,11 @@
 			<var name="tslb"/>
 #endif
 #ifdef WRF_HYDRO
-                        <var name="sfcheadrt"/>
+ <var name="sfcheadrt"/>
+                        <var name="infxsrt"/>
+                        <var name="soldrain"/>
 #endif
+
 		</stream>
 
 		<stream name="diagnostics"
@@ -2106,7 +2109,7 @@
                              description="Tendency of water-friendly aerosol number concentration multiplied by dry air density divided by d(zeta)/dz"
                              packages="mp_thompson_aers_in"/>
 
-                        <var name="tend_tke" name_in_code="tke" array_group="turbulence" units="kg m^{-3} m^2 s^{-2} s^{-1}" 
+                        <var name="tend_tke" name_in_code="tke" array_group="turbulence" units="kg m^{-3} m^2 s^{-2} s^{-1}"
                              description="Tendency of tke multiplied by dry air density divided by d(zeta)/dz"/>
                 </var_array>
 #endif
@@ -3445,6 +3448,12 @@
 
                 <var name="sfcheadrt" type="real" dimensions="nCells Time" units="mm"
                      description="surface water head (routing)"/>
+
+                <var name="infxsrt" type="real" dimensions="nCells Time" units="mm"
+                     description="time-step infiltration excess surface runoff"/>
+
+                <var name="soldrain" type="real" dimensions="nCells Time" units="mm"
+                     description="time-step soil column drainage/subsurface runoff"/>
 
                 <var name="smstav" type="real" dimensions="nCells Time" units="unitless"
                      description="surface moisture availability"/>
