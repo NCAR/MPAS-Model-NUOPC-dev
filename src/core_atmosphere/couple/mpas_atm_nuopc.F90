@@ -587,8 +587,9 @@ contains
          exportState=exportState, rc=rc)
     if (check(rc, __LINE__, file)) return
 
-    call ESMF_ClockAdvance(clock, rc=rc)
-    if (check(rc, __LINE__, file)) return
+    ! this crashes the run later, not needed
+    ! call ESMF_ClockAdvance(clock, rc=rc)
+    ! if (check(rc, __LINE__, file)) return
 
     if (debug) then
        call ESMF_LogWrite("MPAS: exiting Advance", ESMF_LOGMSG_INFO, rc=rc)
