@@ -28,6 +28,8 @@
  logical :: init_sh2o = .false.
  logical :: init_smc = .false.
  logical :: init_sfcheadrt = .false.
+ logical :: init_infxsrt = .false.
+ logical :: init_soldrain = .false.
 
  contains
 
@@ -259,6 +261,7 @@
  ! Hydro
  call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt)
  if (debug) print *, "mpas mesh sfcrunoff", sfcheadrt
+
 
  do i = its,ite
     mpas_noahmp%tsk(i)       = skintemp(i)
@@ -677,7 +680,7 @@
                                          znt
  real(kind=RKIND),dimension(:,:),pointer:: sh2o,smois,tslb
 !--- Hydro
- real(kind=RKIND),dimension(:),pointer:: sfcheadrt
+ real(kind=RKIND),dimension(:),pointer:: sfcheadrt, infxsrt, soldrain
 
  !--- local INOUT pointers (with no Noah LSM equivalent as defined in WRF):
  integer,dimension(:),pointer:: isnowxy
@@ -745,7 +748,10 @@
  call mpas_pool_get_array(diag_physics,'znt'       ,znt       )
 ! Hydro
  call mpas_pool_get_array(diag_physics,'sfcheadrt' ,sfcheadrt )
+ call mpas_pool_get_array(diag_physics,'infxsrt'   ,infxsrt )
+ call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
  if (debug) print *, "sfcheadrt from mpas pool shape", shape(sfcheadrt)
+
 
  do i = its,ite
     skintemp(i)   = mpas_noahmp%tsk(i)
@@ -771,9 +777,13 @@
     znt(i)        = mpas_noahmp%znt(i)
 ! Hydro
     sfcheadrt(i)  = mpas_noahmp%sfcheadrt(i)
+    infxsrt(i)    = mpas_noahmp%infxsrt(i)
+    soldrain(i)   = mpas_noahmp%soldrain(i)
     ! sfcheadrt(i)  = 0.888 ! this changes mesh to 0.888 after history.init
  enddo
 
+     ! infxsrt(:) = 0.222
+     ! soldrain(:) = 0.777
 
  do ns = 1,nsoil
     do i = its,ite
@@ -1105,32 +1115,33 @@
 !         at mpas-hydro-noahmp/src/mpas/src/core_atmosphere/couple/nuopc/mpas_atm_nuopc.F90:565
 
  ! we pass its and ite in but lates get it from mpas_noahmp??
- if (debug) print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
+ ! if (debug) print *, "its, ite", its, ite, mpas_noahmp%its, mpas_noahmp%ite
+ !  its, ite           1         124           1         124
 
- if (mpas_noahmp%sfcheadrt_import_l) then
-    if (init_sfcheadrt) then
-       mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
-    end if
-    init_sfcheadrt = .true.
- end if
- if (mpas_noahmp%smc_import_l) then
-    if (init_smc) then
-       mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
-       mpas_noahmp%smois(its:ite,2) = mpas_noahmp%smois2_buf(its:ite)
-       mpas_noahmp%smois(its:ite,3) = mpas_noahmp%smois3_buf(its:ite)
-       mpas_noahmp%smois(its:ite,4) = mpas_noahmp%smois4_buf(its:ite)
-    end if
-    init_smc = .true.
- end if
- if (mpas_noahmp%sh2o_import_l) then
-    if (init_sh2o) then
-       mpas_noahmp%sh2o(its:ite,1) = mpas_noahmp%sh2o1_buf(its:ite)
-       mpas_noahmp%sh2o(its:ite,2) = mpas_noahmp%sh2o2_buf(its:ite)
-       mpas_noahmp%sh2o(its:ite,3) = mpas_noahmp%sh2o3_buf(its:ite)
-       mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
-    end if
-    init_sh2o = .true.
- end if
+ ! if (mpas_noahmp%sfcheadrt_import_l) then
+ !    if (init_sfcheadrt) then
+ !       mpas_noahmp%sfcheadrt(its:ite) = mpas_noahmp%sfcheadrt_buf(its:ite)
+ !    end if
+ !    ! init_sfcheadrt = .true.
+ ! end if
+ ! if (mpas_noahmp%smc_import_l) then
+ !    if (init_smc) then
+ !       mpas_noahmp%smois(its:ite,1) = mpas_noahmp%smois1_buf(its:ite)
+ !       mpas_noahmp%smois(its:ite,2) = mpas_noahmp%smois2_buf(its:ite)
+ !       mpas_noahmp%smois(its:ite,3) = mpas_noahmp%smois3_buf(its:ite)
+ !       mpas_noahmp%smois(its:ite,4) = mpas_noahmp%smois4_buf(its:ite)
+ !    end if
+ !    ! init_smc = .true.
+ ! end if
+ ! if (mpas_noahmp%sh2o_import_l) then
+ !    if (init_sh2o) then
+ !       mpas_noahmp%sh2o(its:ite,1) = mpas_noahmp%sh2o1_buf(its:ite)
+ !       mpas_noahmp%sh2o(its:ite,2) = mpas_noahmp%sh2o2_buf(its:ite)
+ !       mpas_noahmp%sh2o(its:ite,3) = mpas_noahmp%sh2o3_buf(its:ite)
+ !       mpas_noahmp%sh2o(its:ite,4) = mpas_noahmp%sh2o4_buf(its:ite)
+ !    end if
+ !    ! init_sh2o = .true.
+ ! end if
 
  call NoahmpDriverMain(mpas_noahmp)
 
@@ -1141,18 +1152,22 @@
  !    mpas_noahmp%sfcheadrt_buf(its:ite) = mpas_noahmp%sfcheadrt(its:ite)
  ! end if
 
- if (mpas_noahmp%smc_export_l) then
-    mpas_noahmp%smois1_buf(its:ite) = mpas_noahmp%smois(its:ite,1)
-    mpas_noahmp%smois2_buf(its:ite) = mpas_noahmp%smois(its:ite,2)
-    mpas_noahmp%smois3_buf(its:ite) = mpas_noahmp%smois(its:ite,3)
-    mpas_noahmp%smois4_buf(its:ite) = mpas_noahmp%smois(its:ite,4)
- end if
- if (mpas_noahmp%sh2o_export_l) then
-    mpas_noahmp%sh2o1_buf(its:ite) = mpas_noahmp%sh2o(its:ite,1)
-    mpas_noahmp%sh2o2_buf(its:ite) = mpas_noahmp%sh2o(its:ite,2)
-    mpas_noahmp%sh2o3_buf(its:ite) = mpas_noahmp%sh2o(its:ite,3)
-    mpas_noahmp%sh2o4_buf(its:ite) = mpas_noahmp%sh2o(its:ite,4)
- end if
+ ! print *, "soldrain = ", mpas_noahmp%soldrain(its:its+20)
+ ! print *, "infxsrt = ", mpas_noahmp%infxsrt(its:its+20)
+
+ ! if (mpas_noahmp%smc_export_l) then
+ !    mpas_noahmp%smois1_buf(its:ite) = mpas_noahmp%smois(its:ite,1)
+ !    mpas_noahmp%smois2_buf(its:ite) = mpas_noahmp%smois(its:ite,2)
+ !    mpas_noahmp%smois3_buf(its:ite) = mpas_noahmp%smois(its:ite,3)
+ !    mpas_noahmp%smois4_buf(its:ite) = mpas_noahmp%smois(its:ite,4)
+ ! end if
+ ! if (mpas_noahmp%sh2o_export_l) then
+ !    mpas_noahmp%sh2o1_buf(its:ite) = mpas_noahmp%sh2o(its:ite,1)
+ !    mpas_noahmp%sh2o2_buf(its:ite) = mpas_noahmp%sh2o(its:ite,2)
+ !    mpas_noahmp%sh2o3_buf(its:ite) = mpas_noahmp%sh2o(its:ite,3)
+ !    mpas_noahmp%sh2o4_buf(its:ite) = mpas_noahmp%sh2o(its:ite,4)
+ !    ! stop 'GOOD IT GOT HERE'
+ ! end if
 
 
  !call mpas_log_write('--- end subroutine driver_lsm_noahmp:')
