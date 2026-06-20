@@ -1,5 +1,7 @@
 module mpas_nuopc_fields
   use mpas_nuopc_utils, only: check, create_esmf_mesh
+  use mpas_derived_types, only: domain_type, block_type, mpas_pool_type
+  use mpas_kind_types, only: rkind, r8kind, strkind
   use esmf
   use nuopc
   use nuopc_model, only: nuopc_modelget
@@ -37,6 +39,7 @@ module mpas_nuopc_fields
   type(ESMF_Mesh) :: mesh_esmf
   logical :: mesh_esmf_initialized = .false.
   logical, parameter :: debug = .false.
+  character(len=ESMF_MAXSTR), parameter :: file = __FILE__
 
 contains
 
@@ -56,8 +59,6 @@ contains
     ! local variables
     integer :: n
     logical :: isPresent
-    character(:), allocatable :: file
-    file = __FILE__
 
     rc = ESMF_SUCCESS
     do n = lbound(fieldList,1), ubound(fieldList,1)
@@ -218,6 +219,165 @@ contains
 
 !   end subroutine advertise_fields_foo
 
+  subroutine update_export_fields_after_advance(model, domain, diag_physics)
+    use mpas_atmphys_vars, only: mpas_noahmp
+    use mpas_pool_routines, only: mpas_pool_get_array, mpas_pool_get_subpool
+
+    type(ESMF_GridComp), intent(inout) :: model
+    type(domain_type), intent(in)    :: domain
+    type (mpas_pool_type), pointer, intent(inout) :: diag_physics
+
+    type(mpas_pool_type), pointer :: sfc_input
+    type(block_type), pointer :: block_l
+    real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
+    real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
+
+    type(ESMF_State) :: exportState
+    integer :: rc, n
+
+    ! Pack latest MPAS state into NUOPC export buffers.
+    ! diag_physics already passed
+
+    call NUOPC_ModelGet(model, exportState=exportState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+
+    block_l => domain % blocklist
+    call mpas_pool_get_subpool(block_l%structs, 'sfc_input', sfc_input)
+
+    call mpas_pool_get_array(sfc_input, 'smois', smois) ! stc 1-4
+    call mpas_pool_get_array(sfc_input,'tslb'  ,tslb ) ! 1-4
+    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
+
+    do n=lbound(field_list,1), ubound(field_list,1)
+       if (field_list(n)%rl_export .eqv. .false.) then
+          cycle
+       end if
+
+       select case (trim(field_list(n)%sd_name))
+       case ("soldrain")
+          call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
+          mpas_noahmp%soldrain(:) = soldrain(mpas_noahmp%its:mpas_noahmp%ite)
+       case("infxsrt")
+          call mpas_pool_get_array(diag_physics,'infxsrt'  ,infxsrt )
+          mpas_noahmp%infxsrt(:) = infxsrt(mpas_noahmp%its:mpas_noahmp%ite)
+       case("stc1")
+          mpas_noahmp%tslb(:,1) = tslb(1,mpas_noahmp%its:mpas_noahmp%ite)
+       case("stc2")
+          mpas_noahmp%tslb(:,2) = tslb(2,mpas_noahmp%its:mpas_noahmp%ite)
+       case("stc3")
+          mpas_noahmp%tslb(:,3) = tslb(3,mpas_noahmp%its:mpas_noahmp%ite)
+       case("stc4")
+          mpas_noahmp%tslb(:,4) = tslb(4,mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc1")
+          mpas_noahmp%smois1_buf(:) = smois(1, mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc2")
+          mpas_noahmp%smois2_buf(:) = smois(2, mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc3")
+          mpas_noahmp%smois3_buf(:) = smois(3, mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc4")
+          mpas_noahmp%smois4_buf(:) = smois(4, mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox1")
+          mpas_noahmp%sh2o1_buf(:) = sh2o(1, mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox2")
+          mpas_noahmp%sh2o2_buf(:) = sh2o(2, mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox3")
+          mpas_noahmp%sh2o3_buf(:) = sh2o(3, mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox4")
+          mpas_noahmp%sh2o4_buf(:) = sh2o(4, mpas_noahmp%its:mpas_noahmp%ite)
+       end select
+    end do
+    ! print *, "====="
+    ! print *, "tslb shape =", shape(tslb(:,:))
+    ! print *, "mpas_noahmp%tslb shape =", shape(mpas_noahmp%tslb(:,:))
+    ! print *, "mpas_noahmp%smois shape =", shape(mpas_noahmp%smois(:,:))
+    ! print *, "mpas_noahmp%sh2o shape =", shape(mpas_noahmp%sh2o(:,:))
+    ! output =>
+    ! tslb shape =           4        7936
+    ! mpas_noahmp%tslb shape =        7935           4
+    ! mpas_noahmp%smois shape =        7935           4
+    ! mpas_noahmp%sh2o shape =        7935           4
+    ! stop "investigate"
+
+  end subroutine update_export_fields_after_advance
+
+  subroutine update_import_fields_before_advance(model, domain, diag_physics)
+    use mpas_atmphys_vars, only: mpas_noahmp
+    use mpas_pool_routines, only: mpas_pool_get_array, mpas_pool_get_subpool
+
+    type(ESMF_GridComp), intent(inout) :: model
+    type(domain_type), intent(in)    :: domain
+    type (mpas_pool_type), pointer, intent(inout) :: diag_physics
+
+    type(mpas_pool_type), pointer :: sfc_input
+    type(block_type), pointer :: block_l
+    real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
+    real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
+    type(ESMF_State) :: importState
+    integer :: rc, n
+
+    call NUOPC_ModelGet(model, importState=importState, rc=rc)
+    if (check(rc, __LINE__, file)) return
+    block_l => domain % blocklist
+    call mpas_pool_get_subpool(block_l%structs, 'sfc_input', sfc_input)
+
+    call mpas_pool_get_array(sfc_input, 'smois', smois) ! stc 1-4
+    call mpas_pool_get_array(sfc_input,'tslb'  ,tslb ) ! 1-4
+    call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
+
+    do n=lbound(field_list,1), ubound(field_list,1)
+       if (field_list(n)%rl_import .eqv. .false.) then
+          cycle
+       end if
+
+       select case (trim(field_list(n)%sd_name))
+       case ("soldrain")
+          call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
+          soldrain(mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%soldrain(mpas_noahmp%its:mpas_noahmp%ite)
+       case("infxsrt")
+          call mpas_pool_get_array(diag_physics,'infxsrt'  ,infxsrt )
+          infxsrt(mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%infxsrt(mpas_noahmp%its:mpas_noahmp%ite)
+       case("stc1")
+          tslb(1,mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%tslb(mpas_noahmp%its:mpas_noahmp%ite,1)
+       case("stc2")
+          tslb(2,mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%tslb(mpas_noahmp%its:mpas_noahmp%ite,2)
+       case("stc3")
+          tslb(3,mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%tslb(mpas_noahmp%its:mpas_noahmp%ite,3)
+       case("stc4")
+          tslb(4,mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%tslb(mpas_noahmp%its:mpas_noahmp%ite,4)
+       case("smc1")
+          smois(1, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%smois1_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc2")
+          smois(2, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%smois2_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc3")
+          smois(3, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%smois3_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("smc4")
+          smois(4, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%smois4_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox1")
+          sh2o(1, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%sh2o1_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox2")
+          sh2o(2, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%sh2o2_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox3")
+          sh2o(3, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%sh2o3_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       case("sh2ox4")
+          sh2o(4, mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%sh2o4_buf(mpas_noahmp%its:mpas_noahmp%ite)
+       end select
+    end do
+
+  end subroutine update_import_fields_before_advance
 
 
   ! Allocate the data storage for the advertised variables in component’s
@@ -251,13 +411,11 @@ contains
     ! type(ESMF_Grid) :: grid
 
 
-    character(:), allocatable :: file
     real(ESMF_KIND_R8), pointer :: fptr(:)
     integer :: numElements, numNodes
     integer, parameter :: did = 0
     ! integer, pointer :: nSoilLevels
     integer :: nSoilLevels
-    file = __FILE__
     rc = ESMF_SUCCESS
 
     print *, "MPAS: entering realize fields"
@@ -410,14 +568,12 @@ contains
     character(*), intent(in),optional :: transferOffer
     integer, intent(out) :: rc
     ! local variables
-    character(:), allocatable :: file
     integer :: i, start, end
     ! type(ESMF_GridComp) :: model
     type(ESMF_Clock) :: clock
     type(ESMF_State) :: importState_l
     type(ESMF_State) :: exportState_l
 
-    file = __FILE__
     rc = ESMF_SUCCESS
 
     call NUOPC_ModelGet(model, importState=importState, &
@@ -495,7 +651,6 @@ contains
     type(ESMF_Field) :: field
     ! local variables
     character(len=16)       :: cmemflg
-    character(:), allocatable :: file
     real(ESMF_KIND_R8), allocatable, target :: test_array(:,:)
     type(block_type),pointer:: block
     type(mpas_pool_type), pointer :: sfc_input, diag_physics
@@ -505,7 +660,6 @@ contains
          smois_sfc1(:), smois_sfc2(:), smois_sfc3(:), smois_sfc4(:)
     integer :: i, n
 
-    file = __FILE__
     rc = ESMF_SUCCESS
     i = 0
     ! allocate(test_array(4, 40962))
@@ -781,6 +935,9 @@ contains
               indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          if (check(rc, __LINE__, file)) return
       case ('stc1') ! soil temperature
+         ! print *, "tslb shape =", shape(mpas_noahmp%tslb(:,:))
+         !  tslb shape =        7935           4
+         ! stop "this does NOT  need to be switched to (1,:):"
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%tslb(:,1), &

@@ -6,6 +6,8 @@ module mpas_atm_nuopc
   use mpas_kind_types, only: rkind, r8kind, strkind
   use mpas_nuopc_utils, only: check, printa, gridCreate
   use mpas_subdriver, only: mpas_init, mpas_run, mpas_finalize
+  use mpas_nuopc_fields, only: update_import_fields_before_advance, &
+       update_export_fields_after_advance
   use atm_core, only: atm_core_run_start, atm_core_run_advance
   use esmf
   use nuopc
@@ -562,6 +564,11 @@ contains
     ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
     ! stop "hi"
 
+    ! if (.not. first_import) then
+    call update_import_fields_before_advance(model, domain, diag_physics)
+    ! end if
+
+
     ! atm_core_run_advance takes a single timestep
     do while (currTime < advEndTime)
        if (io_rank .and. (mod(itimestep, 100) == 0)) &
@@ -582,10 +589,8 @@ contains
        currTime = currTime + mpasTimeStep
     end do
 
-    ! query for clock, importState and exportState
-    call NUOPC_ModelGet(model, modelClock=clock, importState=importState, &
-         exportState=exportState, rc=rc)
-    if (check(rc, __LINE__, file)) return
+    ! copy data from MPAS to WRF-Hydro
+    call update_export_fields_after_advance(model, domain, diag_physics)
 
     ! this crashes the run later, not needed
     ! call ESMF_ClockAdvance(clock, rc=rc)

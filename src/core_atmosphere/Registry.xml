@@ -1022,7 +1022,7 @@
 			<var name="tslb"/>
 #endif
 #ifdef WRF_HYDRO
- <var name="sfcheadrt"/>
+                        <var name="sfcheadrt"/>
                         <var name="infxsrt"/>
                         <var name="soldrain"/>
 #endif
