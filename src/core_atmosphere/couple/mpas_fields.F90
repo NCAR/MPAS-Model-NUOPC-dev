@@ -231,14 +231,14 @@ contains
     type(block_type), pointer :: block_l
     real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
     real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
-
-    type(ESMF_State) :: exportState
+    type(ESMF_State) :: export_state
+    logical :: var_exported
     integer :: rc, n
 
     ! Pack latest MPAS state into NUOPC export buffers.
     ! diag_physics already passed
 
-    call NUOPC_ModelGet(model, exportState=exportState, rc=rc)
+    call NUOPC_ModelGet(model, exportState=export_state, rc=rc)
     if (check(rc, __LINE__, file)) return
 
     block_l => domain % blocklist
@@ -249,11 +249,14 @@ contains
     call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
 
     do n=lbound(field_list,1), ubound(field_list,1)
-       if (field_list(n)%rl_export .eqv. .false.) then
+
+       var_exported = NUOPC_IsConnected(export_state, &
+            fieldName=trim(field_list(n)%st_name), rc=rc)
+       if (var_exported .eqv. .false.) then
           cycle
        end if
 
-       select case (trim(field_list(n)%sd_name))
+       select case (trim(field_list(n)%st_name))
        case ("soldrain")
           call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
           mpas_noahmp%soldrain(:) = soldrain(mpas_noahmp%its:mpas_noahmp%ite)
@@ -312,10 +315,11 @@ contains
     type(block_type), pointer :: block_l
     real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
     real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
-    type(ESMF_State) :: importState
+    type(ESMF_State) :: import_state
+    logical :: var_imported
     integer :: rc, n
 
-    call NUOPC_ModelGet(model, importState=importState, rc=rc)
+    call NUOPC_ModelGet(model, importState=import_state, rc=rc)
     if (check(rc, __LINE__, file)) return
     block_l => domain % blocklist
     call mpas_pool_get_subpool(block_l%structs, 'sfc_input', sfc_input)
@@ -325,11 +329,14 @@ contains
     call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
 
     do n=lbound(field_list,1), ubound(field_list,1)
-       if (field_list(n)%rl_import .eqv. .false.) then
+
+       var_imported = NUOPC_IsConnected(import_state, &
+            fieldName=trim(field_list(n)%st_name), rc=rc)
+       if (var_imported .eqv. .false.) then
           cycle
        end if
 
-       select case (trim(field_list(n)%sd_name))
+       select case (trim(field_list(n)%st_name))
        case ("soldrain")
           call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
           soldrain(mpas_noahmp%its:mpas_noahmp%ite) = &
