@@ -18,6 +18,8 @@ module mpas_atm_nuopc
 
 
   logical, parameter :: debug = .false.
+  logical :: first_import = .true.
+
 
   ! NUOPC variables
   ! type(ESMF_State) :: importState, exportState
@@ -564,9 +566,11 @@ contains
     ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
     ! stop "hi"
 
-    ! if (.not. first_import) then
-    call update_import_fields_before_advance(model, domain, diag_physics)
-    ! end if
+    !
+    if (.not. first_import) then
+       call update_import_fields_before_advance(model, domain, diag_physics)
+    end if
+    first_import = .false.
 
 
     ! atm_core_run_advance takes a single timestep
