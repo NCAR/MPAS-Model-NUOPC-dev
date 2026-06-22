@@ -231,15 +231,10 @@ contains
     type(block_type), pointer :: block_l
     real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
     real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
-    type(ESMF_State) :: export_state
-    logical :: var_exported
     integer :: rc, n
 
     ! Pack latest MPAS state into NUOPC export buffers.
     ! diag_physics already passed
-
-    call NUOPC_ModelGet(model, exportState=export_state, rc=rc)
-    if (check(rc, __LINE__, file)) return
 
     block_l => domain % blocklist
     call mpas_pool_get_subpool(block_l%structs, 'sfc_input', sfc_input)
@@ -249,10 +244,7 @@ contains
     call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
 
     do n=lbound(field_list,1), ubound(field_list,1)
-
-       var_exported = NUOPC_IsConnected(export_state, &
-            fieldName=trim(field_list(n)%st_name), rc=rc)
-       if (var_exported .eqv. .false.) then
+       if (field_list(n)%rl_export .eqv. .false.) then
           cycle
        end if
 
@@ -315,12 +307,8 @@ contains
     type(block_type), pointer :: block_l
     real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
     real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
-    type(ESMF_State) :: import_state
-    logical :: var_imported
     integer :: rc, n
 
-    call NUOPC_ModelGet(model, importState=import_state, rc=rc)
-    if (check(rc, __LINE__, file)) return
     block_l => domain % blocklist
     call mpas_pool_get_subpool(block_l%structs, 'sfc_input', sfc_input)
 
@@ -329,10 +317,7 @@ contains
     call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
 
     do n=lbound(field_list,1), ubound(field_list,1)
-
-       var_imported = NUOPC_IsConnected(import_state, &
-            fieldName=trim(field_list(n)%st_name), rc=rc)
-       if (var_imported .eqv. .false.) then
+       if (field_list(n)%rl_import .eqv. .false.) then
           cycle
        end if
 
@@ -559,6 +544,9 @@ contains
         fieldList(n)%rl_export = .false.
       end if
     end do
+
+    ! update global field_list
+    field_list = fieldList
 
     print *, "MPAS: exiting realize fields"
   end subroutine realize_fields
