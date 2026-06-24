@@ -288,7 +288,7 @@
     ! Hydro
     if (.not. allocated(mpas_noahmp%sfcheadrt)) stop "noahmp sfcheadrt not allocated"
     if (.not. associated(sfcheadrt)) stop "mpas sfcheadrt not associated"
-    ! mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
+    mpas_noahmp%sfcheadrt(i) = sfcheadrt(i)
  enddo
 
  do ns = 1,nsoil
@@ -1145,6 +1145,7 @@
 
  call NoahmpDriverMain(mpas_noahmp)
 
+ mpas_noahmp%sfcheadrt(its:ite) = 0.0
  call lsm_noahmp_toMPAS(diag_physics,diag_physics_noahmp,output_noahmp,sfc_input)
 
  ! this isn't exported?

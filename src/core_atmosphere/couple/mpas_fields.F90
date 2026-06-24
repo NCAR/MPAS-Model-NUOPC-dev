@@ -305,7 +305,7 @@ contains
 
     type(mpas_pool_type), pointer :: sfc_input
     type(block_type), pointer :: block_l
-    real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt
+    real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt, sfcheadrt
     real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
     integer :: rc, n
 
@@ -316,20 +316,30 @@ contains
     call mpas_pool_get_array(sfc_input,'tslb'  ,tslb ) ! 1-4
     call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
 
+    ! zero out fluxes at the start of the MPAS timestep
+    call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
+    soldrain(mpas_noahmp%its:mpas_noahmp%ite) = 0.0
+    mpas_noahmp%soldrain(mpas_noahmp%its:mpas_noahmp%ite) = 0.0
+    call mpas_pool_get_array(diag_physics,'infxsrt'  ,infxsrt )
+    infxsrt(mpas_noahmp%its:mpas_noahmp%ite) = 0.0
+    mpas_noahmp%infxsrt(mpas_noahmp%its:mpas_noahmp%ite) = 0.0
+    call mpas_pool_get_array(diag_physics,'sfcheadrt', sfcheadrt )
+    ! noahmp%water%flux%RunoffSurface(:) = 0
+    ! noahmp%water%flux%RunoffSubSurface(:) = 0
+
+
+
     do n=lbound(field_list,1), ubound(field_list,1)
+       ! print *, field_list(n)%rl_import, ": name = ",trim(field_list(n)%st_name)
        if (field_list(n)%rl_import .eqv. .false.) then
           cycle
        end if
 
        select case (trim(field_list(n)%st_name))
-       case ("soldrain")
-          call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
-          soldrain(mpas_noahmp%its:mpas_noahmp%ite) = &
-               mpas_noahmp%soldrain(mpas_noahmp%its:mpas_noahmp%ite)
-       case("infxsrt")
-          call mpas_pool_get_array(diag_physics,'infxsrt'  ,infxsrt )
-          infxsrt(mpas_noahmp%its:mpas_noahmp%ite) = &
-               mpas_noahmp%infxsrt(mpas_noahmp%its:mpas_noahmp%ite)
+       case("sfchead")
+          sfcheadrt(mpas_noahmp%its:mpas_noahmp%ite) = &
+               mpas_noahmp%sfcheadrt_buf(:)
+          mpas_noahmp%sfcheadrt_buf(:) = 0.0
        case("stc1")
           tslb(1,mpas_noahmp%its:mpas_noahmp%ite) = &
                mpas_noahmp%tslb(mpas_noahmp%its:mpas_noahmp%ite,1)
