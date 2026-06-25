@@ -18,7 +18,7 @@ module mpas_atm_nuopc
 
 
   logical, parameter :: debug = .false.
-  logical :: first_import = .true.
+  logical :: after_first_advance = .false.
 
 
   ! NUOPC variables
@@ -566,12 +566,11 @@ contains
     ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
     ! stop "hi"
 
-    !
-    if (.not. first_import) then
+    ! if cold start, do not update import fields during first timestep
+    if (after_first_advance .or. config_do_restart) then
        call update_import_fields_before_advance(model, domain, diag_physics)
     end if
-    first_import = .false.
-
+    after_first_advance = .true.
 
     ! atm_core_run_advance takes a single timestep
     do while (currTime < advEndTime)
