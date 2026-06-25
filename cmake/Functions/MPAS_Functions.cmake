@@ -202,6 +202,7 @@ function(mpas_core_target)
 
     #Create main executable
     add_executable(mpas_${ARG_CORE} ${MPAS_MAIN_SRC})
+    set_target_properties(mpas_${ARG_CORE} PROPERTIES PREFIX "")
     mpas_fortran_target(mpas_${ARG_CORE})
     target_link_libraries(mpas_${ARG_CORE} PUBLIC ${PROJECT_NAME}::core::${ARG_CORE})
 
