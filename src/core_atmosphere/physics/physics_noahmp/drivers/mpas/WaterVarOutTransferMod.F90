@@ -141,8 +141,10 @@ contains
     NoahmpIO%IRELOSS   (I) = NoahmpIO%IRELOSS(I)+(noahmp%water%flux%EvapIrriSprinkler*NoahmpIO%DTBL)
 
 #ifdef WRF_HYDRO
-    NoahmpIO%infxsrt   (I) = max(noahmp%water%flux%RunoffSurface, 0.0)               ! mm, surface runoff
-    NoahmpIO%soldrain  (I) = max(noahmp%water%flux%RunoffSubsurface, 0.0)            ! mm, underground runoff
+    NoahmpIO%infxsrt   (I) = max(noahmp%water%flux%RunoffSurface, 0.0)     ! mm, surface runoff
+    NoahmpIO%soldrain  (I) = max(noahmp%water%flux%RunoffSubsurface, 0.0) ! mm, underground runoff
+    ! NoahmpIO%infxsrt   (I) = NoahmpIO%infxsrt(I) + max(noahmp%water%flux%RunoffSurface, 0.0)     ! mm, surface runoff
+    ! NoahmpIO%soldrain  (I) = NoahmpIO%soldrain(I) + max(noahmp%water%flux%RunoffSubsurface, 0.0) ! mm, underground runoff
     NoahmpIO%qtiledrain(I) = max(noahmp%water%flux%TileDrain, 0.0)                   ! mm, tile drainage
 #endif
 

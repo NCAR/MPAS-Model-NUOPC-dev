@@ -560,11 +560,11 @@ contains
        print *, "dt =", dt
     end if
 
+    ! debugging section
     ! if (io_rank) print *, "MPAS: set soldrain to 0"
     ! mpas_noahmp%soldrain(:) = 0
     ! this prints -888
     ! if (io_rank) print *, "MPAS: sfcrunoff =", mpas_noahmp%sfcrunoff
-    ! stop "hi"
 
     ! if cold start, do not update import fields during first timestep
     if (after_first_advance .or. config_do_restart) then
@@ -611,9 +611,10 @@ contains
     rc = ESMF_SUCCESS
     call ESMF_LogWrite("entering Finalize", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogFlush(rc=rc)
-    call mpas_finalize(corelist, domain)
-    call ESMF_LogWrite("finished mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
+    ! call mpas_finalize(corelist, domain)
+    ! call ESMF_LogWrite("finished mpas_finalize", ESMF_LOGMSG_INFO, rc=rc)
     call ESMF_LogWrite("exiting Finalize", ESMF_LOGMSG_INFO, rc=rc)
+    call ESMF_LogFlush(rc=rc)
   end subroutine Finalize
 
 
