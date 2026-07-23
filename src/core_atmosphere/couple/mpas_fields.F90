@@ -753,7 +753,7 @@ contains
          call mpas_pool_get_subpool(block%structs,'sfc_input', sfc_input)
          call mpas_pool_get_array(sfc_input,'sh2o', sh2o )
          mpas_noahmp%sh2o4_buf(:) = sh2o(4, mpas_noahmp%its:mpas_noahmp%ite)
-         mpas_noahmp%sh2o4_buf(:) = 0
+         ! mpas_noahmp%sh2o4_buf(:) = 0
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%sh2o4_buf(:), &
@@ -827,7 +827,7 @@ contains
          !      farray=smois(2, mpas_noahmp%its:mpas_noahmp%ite), & ! TESTING
          !      indexflag=ESMF_INDEX_DELOCAL, rc=rc)
          ! if (check(rc, __LINE__, file)) return
-         mpas_noahmp%smois2_buf(:) = smois(1, mpas_noahmp%its:mpas_noahmp%ite)
+         mpas_noahmp%smois2_buf(:) = smois(2, mpas_noahmp%its:mpas_noahmp%ite)
          field = ESMF_FieldCreate(name=fld_name, mesh=mesh, &
               meshloc=ESMF_MESHLOC_ELEMENT, &
               farray=mpas_noahmp%smois2_buf(:), &
