@@ -1,9 +1,4 @@
-#define ESMF_ERR_RETURN(rc) if (ESMF_LogFoundError( \
-        rcToCheck=rc, \
-        msg=ESMF_LOGERR_PASSTHRU, \
-        line=__LINE__, \
-        file=__FILE__) \
-    ) return
+#include "mpas_nuopc_macros.inc"
 
 module mpas_nuopc_atm
   !> MPAS NUOPC Cap for Atmosphere
@@ -100,6 +95,8 @@ module mpas_nuopc_atm
 
   subroutine Advertise(model, rc)
     !> Advertise available export fields and desired import fields
+    use mpas_nuopc_fields, only : advertise_fields, get_field_list, &
+         cap_field_t, add_field_dictionary
 
     ! arguments
     type(ESMF_GridComp)  :: model
@@ -110,6 +107,7 @@ module mpas_nuopc_atm
     type(mpas_nuopc_atm_state), pointer :: mState
     type(ESMF_VM) :: vm
     type(ESMF_State) :: importState, exportState
+    type(cap_field_t), allocatable, target :: field_list(:)
     integer :: int_mpic
 #ifdef MPAS_USE_MPI_F08
     type(MPI_Comm) :: mpic
@@ -143,12 +141,29 @@ module mpas_nuopc_atm
       external_comm=int_mpic)
 #endif
 
+    call NUOPC_ModelGet(model, importState=importState, &
+         exportState=exportState, rc=rc)
+    ESMF_ERR_RETURN(rc)
+
+    field_list = get_field_list()
+    call add_field_dictionary(field_list, rc)
+    ESMF_ERR_RETURN(rc)
+
+    call advertise_fields(model, field_list, importState, exportState, rc=rc)
+    ESMF_ERR_RETURN(rc)
+
+    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    ESMF_ERR_RETURN(rc)
+    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    ESMF_ERR_RETURN(rc)
+
   end subroutine Advertise
 
   !-----------------------------------------------------------------------------
 
   subroutine Realize(model, rc)
     !> Check field connections and realize connected fields
+    use mpas_nuopc_fields, only : realize_fields, get_field_list, cap_field_t
 
     ! arguments
     type(ESMF_GridComp)  :: model
@@ -158,6 +173,7 @@ module mpas_nuopc_atm
     type(mpas_nuopc_atm_wrapper) :: modelStateWrapper
     type(mpas_nuopc_atm_state), pointer :: mState
     type(ESMF_State) :: importState, exportState
+    type(cap_field_t), allocatable, target :: field_list(:)
 
     rc = ESMF_SUCCESS
 
@@ -169,7 +185,10 @@ module mpas_nuopc_atm
       exportState=exportState, rc=rc)
     ESMF_ERR_RETURN(rc)
 
-    ! (no fields to connect for initial implementation)
+    field_list = get_field_list()
+    call realize_fields(model, mState%domain, field_list, importState, exportState, &
+         realizeAllImport=.false., realizeAllExport=.true., rc=rc)
+    ESMF_ERR_RETURN(rc)
 
   end subroutine Realize
 
