@@ -91,7 +91,7 @@ module mpas_nuopc_atm
     ESMF_ERR_RETURN(rc)
 
     allocate(modelStateWrapper%mState)
-    call ESMF_InternalStateAdd(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompSetInternalState(model, modelStateWrapper, rc)
     ESMF_ERR_RETURN(rc)
 
   end subroutine SetServices
@@ -117,7 +117,7 @@ module mpas_nuopc_atm
 
     rc = ESMF_SUCCESS
 
-    call ESMF_InternalStateGet(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompGetInternalState(model, modelStateWrapper, rc)
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
@@ -161,7 +161,7 @@ module mpas_nuopc_atm
 
     rc = ESMF_SUCCESS
 
-    call ESMF_InternalStateGet(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompGetInternalState(model, modelStateWrapper, rc)
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
@@ -194,7 +194,7 @@ module mpas_nuopc_atm
 
     rc = ESMF_SUCCESS
 
-    call ESMF_InternalStateGet(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompGetInternalState(model, modelStateWrapper, rc)
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
@@ -261,7 +261,7 @@ module mpas_nuopc_atm
 
     rc = ESMF_SUCCESS
 
-    call ESMF_InternalStateGet(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompGetInternalState(model, modelStateWrapper, rc)
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
@@ -313,7 +313,7 @@ module mpas_nuopc_atm
 
     rc = ESMF_SUCCESS
 
-    call ESMF_InternalStateGet(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompGetInternalState(model, modelStateWrapper, rc)
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
@@ -353,7 +353,7 @@ module mpas_nuopc_atm
 
     rc = ESMF_SUCCESS
 
-    call ESMF_InternalStateGet(model, internalState=modelStateWrapper, rc=rc)
+    call ESMF_GridCompGetInternalState(model, modelStateWrapper, rc)
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
