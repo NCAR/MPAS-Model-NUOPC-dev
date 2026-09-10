@@ -691,13 +691,13 @@ ifeq "$(MPAS_ESMF)" "external"
     $(error ESMFMKFILE must be set if MPAS_ESMF=external)
   endif
   include $(ESMFMKFILE)
-  export MPAS_ESMF_INC = $(ESMF_F90COMPILEPATHS)
-  export MPAS_ESMF_LIB = $(ESMF_F90LINKPATHS) $(ESMF_F90ESMFLINKPATHS) $(ESMF_F90ESMFLINKLIBS)
+  override MPAS_EXTERNAL_INCLUDES += $(ESMF_F90COMPILEPATHS)
+  override MPAS_EXTERNAL_LIBS += $(ESMF_F90LINKPATHS) $(ESMF_F90ESMFLINKPATHS) $(ESMF_F90ESMFLINKLIBS)
   override CPPFLAGS += -DMPAS_EXTERNAL_ESMF_LIB=true
   ESMF_MESSAGE="MPAS was built with an external ESMF library using ESMFMKFILE"
 else ifeq "$(MPAS_ESMF)" "embedded"
-  export MPAS_ESMF_INC = -I$(PWD)/src/external/esmf_time_f90
-  export MPAS_ESMF_LIB = -L$(PWD)/src/external/esmf_time_f90 -lesmf_time
+  override MPAS_EXTERNAL_INCLUDES += -I$(PWD)/src/external/esmf_time_f90
+  override MPAS_EXTERNAL_LIBS += -L$(PWD)/src/external/esmf_time_f90 -lesmf_time
   ESMF_MESSAGE="MPAS was built with the embedded ESMF timekeeping library."
 else
   $(error Invalid MPAS_ESMF option: $(MPAS_ESMF) - valid options "embedded", "external")
@@ -714,6 +714,7 @@ else
 	PIO_LIB = $(PIO)
 endif
 LIBS = -L$(PIO_LIB)
+PIO_LIBS = -L$(PIO_LIB)
 
 #
 # Regardless of PIO library version, look for an include subdirectory of PIO path
@@ -736,17 +737,21 @@ ifneq ($(wildcard $(PIO_LIB)/libpio\.*), )
 	# Makefiles don't support "and" operators so we have nested "if" instead
 	ifneq "$(wildcard $(PIO_LIB)/libpio\.*)" "$(PIO_LIB)/libpio.settings"
 		LIBS += -lpio
+		PIO_LIBS += -lpio
 	endif
 endif
 
 ifneq ($(wildcard $(PIO_LIB)/libpiof\.*), )
 	LIBS += -lpiof
+	PIO_LIBS += -lpiof
 endif
 ifneq ($(wildcard $(PIO_LIB)/libpioc\.*), )
 	LIBS += -lpioc
+	PIO_LIBS += -lpioc
 endif
 ifneq ($(wildcard $(PIO_LIB)/libgptl\.*), )
 	LIBS += -lgptl
+	PIO_LIBS += -lgptl
 endif
 
 else # Not using PIO, using SMIOL
@@ -1340,10 +1345,10 @@ endif
 		        &   call PIO_setframe(pio_file, field_desc, frame_number)\n$\
 		        end program\n" | sed 's/&/ /' > pio2.f90; $\
 		$\
-		$(FC) pio1.f90 -o pio1.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(LIBS) > /dev/null 2>&1; $\
+		$(FC) pio1.f90 -o pio1.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(PIO_LIBS) > /dev/null 2>&1; $\
 		pio1_status=$$?; $\
 		$\
-		$(FC) pio2.f90 -o pio2.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(LIBS) > /dev/null 2>&1; $\
+		$(FC) pio2.f90 -o pio2.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(PIO_LIBS) > /dev/null 2>&1; $\
 		pio2_status=$$?; $\
 		$\
 		if [ $$pio1_status -ne 0 -a $$pio2_status -ne 0 ]; then $\
@@ -1354,9 +1359,9 @@ endif
 		    printf "Both of the following commands to compile a test program\n" >> .piotest.log; $\
 		    printf "failed with errors:\n" >> .piotest.log; $\
 		    printf "\n" >> .piotest.log; $\
-		    printf "$(FC) pio1.f90 -o pio1.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(LIBS)\n" >> .piotest.log; $\
+		    printf "$(FC) pio1.f90 -o pio1.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(PIO_LIBS)\n" >> .piotest.log; $\
 		    printf "\n" >> .piotest.log; $\
-		    printf "$(FC) pio2.f90 -o pio2.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(LIBS)\n" >> .piotest.log; $\
+		    printf "$(FC) pio2.f90 -o pio2.x $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) $(PIO_LIBS)\n" >> .piotest.log; $\
 		    printf "\n" >> .piotest.log; $\
 		    printf "The pio1.f90 and pio2.f90 test programs have been left in\n" >> .piotest.log; $\
 		    printf "the top-level MPAS directory for further debugging.\n" >> .piotest.log; $\
