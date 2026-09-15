@@ -1,0 +1,28 @@
+#############################################################
+####  ESMX_Data <-> mpas_atmosphere Configuration       #####
+####  Sourthern Great Plains (SGP) Low Resolution Test  #####
+#############################################################
+
+ESMX:
+  App:
+    globalResourceControl:  true
+    logKindFlag:            ESMF_LOGKIND_Multi
+    logAppendFlag:          false
+    logFlush:               true
+    fieldDictionary:        fd_mpas.yml
+    startTime:              2015-07-11T12:00:00
+    stopTime:               2015-07-11T14:00:00
+  Driver:
+    componentList:          [ATM]
+    attributes:
+      Verbosity: low
+    runSequence: |
+      @144
+        ATM
+      @
+
+ATM:
+  model: mpas_atmosphere
+  petList:          [0-3]
+  attributes:
+    Verbosity: high
