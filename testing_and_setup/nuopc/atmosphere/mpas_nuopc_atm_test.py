@@ -414,7 +414,9 @@ class Check:
                 f"Unknown check type: {self.type}. "
                 "Supported types: 'exists', 'diff','diff-cmp', 'diff-nc'"
             )
-        self.tolerance = float(check_spec.get('tolerance', 0.0))
+        # Allow small absolute floating-point differences between architectures.
+        # Explicit per-check tolerances, including zero, override this default.
+        self.tolerance = float(check_spec.get('tolerance', 1.0e-6))
 
     def _exists_check(self, rundir, diffnc):
         """Perform an existence check for the file."""
