@@ -31,6 +31,15 @@ add_library(mpas_atm_nuopc
   $<TARGET_OBJECTS:ezxml>
   )
 
+# GNU Fortran sets the default unformatted I/O byte order in the main
+# program. Propagate this to the ESMX driver: TARGET_OBJECTS does not carry
+# the core_atmosphere compile options through to its consumers.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(mpas_atm_nuopc INTERFACE
+    $<$<COMPILE_LANGUAGE:Fortran>:-fconvert=big-endian>
+  )
+endif()
+
 
 link_directories(${CMAKE_INSTALL_LIBDIR})
 

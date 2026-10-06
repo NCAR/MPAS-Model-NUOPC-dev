@@ -333,7 +333,18 @@
  enddo
 
 
- if(mpas_noahmp%restart_flag) return
+ if(mpas_noahmp%restart_flag) then
+    ! Open-water and sea-ice cells are skipped by NoahmpDriverMain, so these
+    ! diagnostics retain their initialized values throughout a continuous run.
+    ! Restore the saved values instead of leaving the allocation defaults.
+    call mpas_pool_get_array(output_noahmp,'t2mvxy',t2mvxy)
+    call mpas_pool_get_array(output_noahmp,'t2mbxy',t2mbxy)
+    call mpas_pool_get_array(output_noahmp,'t2mxy',t2mxy)
+    mpas_noahmp%t2mvxy(its:ite) = t2mvxy(its:ite)
+    mpas_noahmp%t2mbxy(its:ite) = t2mbxy(its:ite)
+    mpas_noahmp%t2mxy(its:ite) = t2mxy(its:ite)
+    return
+ endif
 
 !--- initialization of time-varying variables needed in subroutine NoahmpInitMain:
  call mpas_pool_get_array(sfc_input,'skintemp',skintemp)

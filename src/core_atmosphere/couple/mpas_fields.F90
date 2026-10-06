@@ -8,8 +8,6 @@ module mpas_nuopc_fields
   use mpas_io, only: MPAS_REAL_FILLVAL
   implicit none
 
-  logical, save :: skip_first_restart_import = .true.
-
   type cap_field_t
     sequence
     character(len=64)           :: sd_name   = "dummy" ! standard name
@@ -310,7 +308,6 @@ contains
     real(kind=RKIND), dimension(:), pointer :: soldrain, infxsrt, sfcheadrt
     real(kind=RKIND), dimension(:,:), pointer :: smois, sh2o, tslb
     integer :: rc, n
-    logical :: skip_soil_moisture_import
 
     block_l => domain % blocklist
     call mpas_pool_get_subpool(block_l%structs, 'sfc_input', sfc_input)
@@ -318,9 +315,6 @@ contains
     call mpas_pool_get_array(sfc_input, 'smois', smois) ! stc 1-4
     call mpas_pool_get_array(sfc_input,'tslb'  ,tslb ) ! 1-4
     call mpas_pool_get_array(sfc_input, 'sh2o', sh2o) ! 1-4
-
-    skip_soil_moisture_import = mpas_noahmp%restart_flag .and. skip_first_restart_import
-    skip_first_restart_import = .false.
 
     ! zero out fluxes at the start of the MPAS timestep
     call mpas_pool_get_array(diag_physics,'soldrain'  ,soldrain )
@@ -359,35 +353,27 @@ contains
           tslb(4,mpas_noahmp%its:mpas_noahmp%ite) = &
                mpas_noahmp%tslb(mpas_noahmp%its:mpas_noahmp%ite,4)
        case("smc1")
-          if (.not. skip_soil_moisture_import) &
              smois(1, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%smois1_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("smc2")
-          if (.not. skip_soil_moisture_import) &
              smois(2, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%smois2_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("smc3")
-          if (.not. skip_soil_moisture_import) &
              smois(3, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%smois3_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("smc4")
-          if (.not. skip_soil_moisture_import) &
              smois(4, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%smois4_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("sh2ox1")
-          if (.not. skip_soil_moisture_import) &
              sh2o(1, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%sh2o1_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("sh2ox2")
-          if (.not. skip_soil_moisture_import) &
              sh2o(2, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%sh2o2_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("sh2ox3")
-          if (.not. skip_soil_moisture_import) &
              sh2o(3, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%sh2o3_buf(mpas_noahmp%its:mpas_noahmp%ite)
        case("sh2ox4")
-          if (.not. skip_soil_moisture_import) &
              sh2o(4, mpas_noahmp%its:mpas_noahmp%ite) = &
                   mpas_noahmp%sh2o4_buf(mpas_noahmp%its:mpas_noahmp%ite)
        end select

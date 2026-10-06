@@ -916,6 +916,10 @@
 			<var name="hu_oml"/>
 			<var name="hv_oml"/>
 			<var_struct name="diag_physics_noahmp"/>
+			<!-- Noah-MP retains these diagnostics at cells skipped by its driver. -->
+			<var name="t2mvxy"/>
+			<var name="t2mbxy"/>
+			<var name="t2mxy"/>
 #endif
 		</stream>
 
