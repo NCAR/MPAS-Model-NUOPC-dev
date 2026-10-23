@@ -1,19 +1,47 @@
-#include "mpas_nuopc_macros.inc"
+#include "mpas_nuopc_macros.h"
 
-module mpas_nuopc_utils
+#ifndef DEBUG
+#define DEBUG .true.
+#endif
+
+module mpas_nuopc_geom
   use mpi
   use esmf
   use netcdf
   use nuopc
+  use mpas_derived_types, only: mpas_pool_type
+  use mpas_derived_types, only: domain_type
+  use mpas_derived_types, only: mpas_pool_type
+  use mpas_derived_types, only: StrKIND
+  use mpas_derived_types, only: MPAS_STREAM_PROPERTY_FILENAME
+  use mpas_derived_types, only: MPAS_STREAM_MGR_NOERR
+  use mpas_pool_routines, only: mpas_pool_get_subpool
+  use mpas_pool_routines, only: mpas_pool_get_dimension
+  use mpas_pool_routines, only: mpas_pool_get_array
+  use mpas_pool_routines, only: mpas_pool_get_config
+  use mpas_stream_manager, only: MPAS_stream_mgr_get_property
+  use mpas_dmpar, only: mpas_dmpar_sum_int
+  use netcdf
+  use iso_fortran_env, only : real64, int32
   implicit none
 
-  character(len=ESMF_MAXSTR), parameter :: file = __FILE__
-  logical, parameter :: debug = .false.
-  integer, allocatable :: gindex(:)
+  public mpas_distgridcreate
+  public mpas_meshcreate
 
 contains
 
-  function create_esmf_mesh(domain, rc) result(mesh)
+  subroutine check_nc(status, where)
+    integer, intent(in) :: status
+    character(len=*), intent(in) :: where
+    if (status /= nf90_noerr) then
+      write(*,'(A)') 'NetCDF error in '//trim(where)//': '//trim(nf90_strerror(status))
+      error stop 1
+    end if
+  end subroutine check_nc
+
+  !-----------------------------------------------------------------------
+  ! Create an ESMF mesh from the MPAS domain and grid file
+  function mpas_meshcreate(distgrid, domain, rc) result(mesh)
     !> Build the ESMF mesh matching the MPAS decomposition.
     !>
     !> Errors here abort the whole job rather than returning. Every failure point
@@ -21,19 +49,19 @@ contains
     !> file conversion runs on PET0 while the others wait inside it -- so a local
     !> return would strand the remaining PETs and turn a clean error into a
     !> walltime kill. rc is still set so callers can react if that ever changes.
-    use mpas_derived_types, only: domain_type
-    type(domain_type), intent(in)    :: domain
+    ! arguments
+    type(ESMF_DistGrid), intent(in) :: distgrid
+    type(domain_type), intent(in) :: domain
     integer, intent(out) :: rc
+    ! return value
     type(ESMF_Mesh) :: mesh
-
+    ! local variables
     character(len=:), allocatable :: mpas_grid_file, mesh_file
-    type(ESMF_DistGrid) :: distgrid
     type(ESMF_VM) :: vm
-    integer :: ncount, nelem
     integer :: localPet
-    ! ESMF_FILEFORMAT_* are a derived type, not integer constants
     type(ESMF_FileFormat_Flag) :: fileFormat
-    logical :: exists, on_a_sphere
+    logical :: exists
+    logical :: on_a_sphere
 
     rc = ESMF_SUCCESS
 
@@ -43,18 +71,19 @@ contains
     ! mesh. A planar MPAS mesh keeps its coordinates in xCell/yCell and
     ! xVertex/yVertex, and goes out as an ESMF unstructured mesh in Cartesian
     ! (kilometre) coordinates instead.
-    on_a_sphere = mpas_mesh_on_a_sphere(mpas_grid_file)
+    on_a_sphere = mpas_mesh_on_a_sphere(domain, rc=rc)
+    ESMF_ERR_ABORT(rc)
     if (on_a_sphere) then
-       mesh_file  = mpas_mesh_tmp_filename(mpas_grid_file, '.tmp.scrip.nc')
-       fileFormat = ESMF_FILEFORMAT_SCRIP
+      mesh_file  = mpas_mesh_tmp_filename(mpas_grid_file, '.tmp.scrip.nc')
+      fileFormat = ESMF_FILEFORMAT_SCRIP
     else
-       mesh_file  = mpas_mesh_tmp_filename(mpas_grid_file, '.tmp.esmfmesh.nc')
-       fileFormat = ESMF_FILEFORMAT_ESMFMESH
+      mesh_file  = mpas_mesh_tmp_filename(mpas_grid_file, '.tmp.esmfmesh.nc')
+      fileFormat = ESMF_FILEFORMAT_ESMFMESH
     end if
 
     ! Only one PET generates the file. Every PET used to write the whole thing
     ! concurrently, which raced on the same bytes; the others wait here instead.
-    ! Note get_mpas_dist_grid() still derives its rank from the *global* VM, so
+    ! Note mpas_distgridcreate() still derives its rank from the *global* VM, so
     ! both assume the component owns every PET.
     call ESMF_VMGetCurrent(vm, rc=rc)
     ESMF_ERR_ABORT(rc)
@@ -62,151 +91,83 @@ contains
     ESMF_ERR_ABORT(rc)
 
     if (localPet == 0) then
-       inquire(file=trim(mesh_file), exist=exists)
-       if (.not. exists) then
-          if (on_a_sphere) then
-             call mpas_to_scrip_mesh(mpas_grid_file, mesh_file)
-          else
-             call mpas_to_esmf_mesh(mpas_grid_file, mesh_file)
-          end if
-       end if
+      inquire(file=trim(mesh_file), exist=exists)
+      if (.not. exists) then
+        if (on_a_sphere) then
+          call mpas_to_scrip_mesh(mpas_grid_file, mesh_file)
+        else
+          call mpas_to_esmf_mesh(mpas_grid_file, mesh_file)
+        end if
+      end if
     end if
     call ESMF_VMBarrier(vm, rc=rc)
     ESMF_ERR_ABORT(rc)
 
-    distgrid  = get_mpas_dist_grid(domain, rc)
-    ESMF_ERR_ABORT(rc)
     mesh = ESMF_MeshCreate(filename=mesh_file, &
-         elementDistgrid=distgrid, &
-         fileformat=fileFormat, rc=rc)
+      elementDistgrid=distgrid, &
+      fileformat=fileFormat, rc=rc)
     ESMF_ERR_ABORT(rc)
 
-    if (debug) then
-       call ESMF_MeshWrite(mesh, "mpas_mesh_from_file", rc=rc)
-       ESMF_ERR_ABORT(rc)
+    if (DEBUG) then
+      call ESMF_MeshWrite(mesh, "mpas_mesh_from_file", rc=rc)
+      ESMF_ERR_ABORT(rc)
     end if
 
-    ! Get dimensions/counts
-    call ESMF_MeshGet(mesh, nodeCount=ncount, elementCount=nElem, rc=rc)
-    ESMF_ERR_ABORT(rc)
-  end function create_esmf_mesh
+  end function mpas_meshcreate
 
-  subroutine check_nf90(stat, func)
-    integer, intent(in) :: stat
-    character(len=*), intent(in) :: func
-    if (stat /= nf90_noerr) then
-       write(*,*) "NetCDF Error: ", trim(func), " failure"
-       error stop
-    end if
-  end subroutine check_nf90
-
-  function check(rc, line, file_in) result(res)
-    integer, intent(in) :: rc
-    ! character(len=*), intent(in) :: msg
-    integer, intent(in) :: line
-    character(len=*), intent(in) :: file_in
-    logical :: res
-    res = ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-         line=line, file=file_in)
-    ! this won't work properly in parallel
-    if (res .eqv. .true.) error stop "Bad Check, msg = " // ESMF_LOGERR_PASSTHRU
-  end function check
-
-  function get_mpas_dist_grid(domain, rc) &
-       result(dist_grid)
-    use mpas_derived_types, only: domain_type, mpas_pool_type, StrKIND
-    use mpas_pool_routines, only: mpas_pool_get_config
+  !-----------------------------------------------------------------------
+  ! Create an ESMF distributed grid from the MPAS domain
+  ! The sequence index is derived from the local-to-global cell mapping
+  ! and includes only the owned cells.
+  function mpas_distgridcreate(domain, rc) result(dist_grid)
+    ! arguments
     type(domain_type), intent(in) :: domain
     integer, intent(inout) :: rc
+    ! return value
     type(ESMF_DistGrid) :: dist_grid
+    ! local variables
+    type(mpas_pool_type), pointer :: mesh
+    integer, pointer :: nCells
+    integer, pointer :: nCellsSolve
+    integer, dimension(:), pointer :: indexToCellID
+    integer, allocatable :: seqIndex(:)
+    integer :: nCellsHalo
+    integer :: nCellsGlobal
+    character(*), parameter :: method = "mpas_distgridcreate"
 
-    type(ESMF_VM)       :: vm
-    character(len=256) :: mpas_graph_file, mpas_grid_file, iomsg
-    character(len=StrKIND), pointer :: config_block_decomp_file_prefix
-    integer :: unit, iostat, irank, localCount, ierr, tmp
-    integer :: i, rank, np, idx, inode
     rc = ESMF_SUCCESS
 
-    call ESMF_VMGetGlobal(vm, rc=rc)
+    ! get the mesh decomposition information
+    call mpas_pool_get_subpool(domain%blocklist%structs, 'mesh', mesh)
+    call mpas_pool_get_dimension(mesh, 'nCells', nCells)
+    call mpas_pool_get_dimension(mesh, 'nCellsSolve', nCellsSolve)
+    call mpas_pool_get_array(mesh, 'indexToCellID', indexToCellID)
+    call mpas_dmpar_sum_int(domain%dminfo, nCellsSolve, nCellsGlobal)
+    nCellsHalo = nCells - nCellsSolve
+
+    ! allocate and fill
+    allocate(seqIndex(nCellsSolve))
+    seqIndex(1:nCellsSolve) = indexToCellID(1:nCellsSolve)
+
+    ! print information about the sequence index range
+    write(*,"(1(A,A),4(A,I0))") "MPAS: ", method, &
+      " my_proc=", domain%dminfo%my_proc_id, &
+      " LocalSolverCells=", nCellsSolve, &
+      " LocalHaloCells=", nCellsHalo, &
+      " GlobalCells=", nCellsGlobal
+
+    dist_grid = ESMF_DistGridCreate(arbSeqIndexList=seqIndex, rc=rc)
     ESMF_ERR_RETURN(rc)
-    call ESMF_VMGet(vm, localPet=rank, petCount=np, rc=rc)
-    ESMF_ERR_RETURN(rc)
+  end function mpas_distgridcreate
 
-    ! get config_block_decomp_file_prefix
-    call mpas_pool_get_config(domain % configs, &
-         'config_block_decomp_file_prefix', config_block_decomp_file_prefix)
-
-    ! open .graph.info when np==1 or .graph.info.np when np>1
-    if (np == 1) then
-       i = index(trim(config_block_decomp_file_prefix), '.part', back=.true.)
-       mpas_graph_file = config_block_decomp_file_prefix(:i-1)
-       print *, "MPAS: opening mpas_graph_file =", mpas_graph_file
-       open(newunit=unit, file=mpas_graph_file, status="old", &
-            action="read", iostat=ierr)
-       if (ierr /= 0) error stop "Failed to open frontrange.graph.info"
-
-       read(unit, *, iostat=ierr) localCount, tmp   ! reads: first_int second_int
-       if (ierr /= 0) error stop &
-            "Failed to read first line of frontrange.graph.info"
-       close(unit)
-    else
-       write(mpas_graph_file, '(A,I0)') &
-            trim(config_block_decomp_file_prefix), np
-       print *, "MPAS: opening mpas_graph_file =", mpas_graph_file
-       open(newunit=unit, file=mpas_graph_file, &
-            status='old', action='read', iostat=iostat, iomsg=iomsg)
-       if (iostat /= 0) then
-          print *, trim(iomsg)
-          stop "Error opening [casename].graph.info.part.[np]"
-       end if
-       localCount = 0
-       do
-          read(unit, *, iostat=iostat) irank
-          if (iostat /= 0) exit
-          if (irank == rank) localCount = localCount + 1
-       end do
-    end if
-
-    allocate(gindex(localCount))
-    print *, rank, "/", np, ": with localCount =", localCount
-
-    ! setup grid distribution
-    if (np == 1) then
-       inode = 1
-       do inode = 1, localCount
-          gindex(inode) = inode
-       end do
-    else
-       rewind(unit)
-       idx   = 0
-       inode = 0
-
-       do
-          read(unit, *, iostat=iostat) irank
-          if (iostat /= 0) exit
-
-          inode = inode + 1 ! inode = line number
-          if (irank == rank) then
-             idx = idx + 1
-             gindex(idx) = inode ! seqIndex = global node id
-          end if
-       end do
-    end if
-    close(unit)
-
-    ! print *, rank,":gindex=", gindex(1:10)
-    ! stop "here"
-    dist_grid = ESMF_DistGridCreate(arbSeqIndexList=gindex, rc=rc)
-    ESMF_ERR_RETURN(rc)
-  end function get_mpas_dist_grid
-
-  function get_mpas_grid_filename(domain) &
-       result(mpas_grid_file)
-    use mpas_derived_types, only: domain_type, StrKIND, &
-         MPAS_STREAM_PROPERTY_FILENAME, MPAS_STREAM_MGR_NOERR
-    use mpas_stream_manager, only: MPAS_stream_mgr_get_property
+  !-----------------------------------------------------------------------
+  ! Get the filename of the MPAS grid file from the domain's stream manager
+  function get_mpas_grid_filename(domain) result(mpas_grid_file)
+    ! arguments
     type(domain_type), intent(in) :: domain
+    ! return value
     character(len=:), allocatable :: mpas_grid_file
+    ! local variables
     character (len=StrKIND) :: filename
     integer :: ierr
 
@@ -225,6 +186,9 @@ contains
     mpas_grid_file = trim(filename)
   end function get_mpas_grid_filename
 
+  !-----------------------------------------------------------------------
+  ! Determine the temporary filename for the MPAS mesh based on the grid
+  ! file and suffix
   function mpas_mesh_tmp_filename(mpas_grid_file, suffix) result(mesh_file)
     character(len=*), intent(in) :: mpas_grid_file
     character(len=*), intent(in) :: suffix
@@ -239,29 +203,30 @@ contains
     mesh_file = mpas_grid_file(:i-1) // suffix
   end function mpas_mesh_tmp_filename
 
-  function mpas_mesh_on_a_sphere(mpasFile) result(on_a_sphere)
-    !> Read the 'on_a_sphere' global attribute of an MPAS mesh file. Read-only,
-    !> so every PET may call it concurrently.
-    character(len=*), intent(in) :: mpasFile
+  !-----------------------------------------------------------------------
+  ! Determine if the MPAS mesh is on a sphere
+  function mpas_mesh_on_a_sphere(domain, rc) result(on_a_sphere)
+    ! arguments
+    type(domain_type), intent(in) :: domain
+    integer, intent(inout) :: rc
+    ! return value
     logical :: on_a_sphere
+    ! local variables
+    type(mpas_pool_type), pointer :: mesh
+    logical, pointer :: mesh_on_a_sphere
+    character(*), parameter :: method = "mpas_mesh_on_a_sphere"
 
-    character(len=:), allocatable :: attval
-    integer :: stat, fin, attlen
+    rc = ESMF_SUCCESS
 
-    stat = nf90_open(trim(mpasFile), nf90_nowrite, fin)
-    call check_nf90(stat, 'nf90_open('//trim(mpasFile)//')')
+    call mpas_pool_get_subpool(domain%blocklist%structs, 'mesh', mesh)
+    call mpas_pool_get_config(mesh, 'on_a_sphere', mesh_on_a_sphere)
+    on_a_sphere = mesh_on_a_sphere
 
-    stat = nf90_inquire_attribute(fin, nf90_global, 'on_a_sphere', len=attlen)
-    call check_nf90(stat, 'nf90_inquire_attribute(on_a_sphere)')
-    allocate(character(len=attlen) :: attval)
-    stat = nf90_get_att(fin, nf90_global, 'on_a_sphere', attval)
-    call check_nf90(stat, 'nf90_get_att(on_a_sphere)')
+    ! print information about the sequence index range
+    write(*,"(1(A,A),1(A,I0),1(A,L1))") "MPAS: ", method, &
+      " my_proc=", domain%dminfo%my_proc_id, &
+      " on_a_sphere=", on_a_sphere
 
-    stat = nf90_close(fin)
-    call check_nf90(stat, 'nf90_close('//trim(mpasFile)//')')
-
-    ! Some MPAS files pad the attribute, e.g. 'NO              '
-    on_a_sphere = (trim(adjustl(attval)) /= 'NO')
   end function mpas_mesh_on_a_sphere
 
   ! Convert a *planar* MPAS mesh to the ESMF unstructured grid format
@@ -281,7 +246,7 @@ contains
   !
   ! Only PET0 calls this, so all NetCDF access here is serial.
   subroutine mpas_to_esmf_mesh(mpasFile, meshFile)
-    use netcdf
+
     implicit none
 
     character(len=*), intent(in) :: mpasFile
@@ -317,23 +282,28 @@ contains
     integer :: var_nodeCoords, var_elementConn, var_numElementConn
     integer :: var_centerCoords
 
+    ! land-ocean mask (1=land, 0=ocean)
+    integer :: var_elementMask
+    logical :: haveLandMask
+    integer(ESMF_KIND_I4), allocatable :: landMask(:)
+
     stat = nf90_open(trim(mpasFile), nf90_nowrite, fin)
-    call check_nc(stat, 'nf90_open('//trim(mpasFile)//')')
+    call check_nc(stat,  'nf90_open('//trim(mpasFile)//')')
 
     stat = nf90_inq_dimid(fin, 'nCells', dimid)
-    call check_nc(stat, 'nf90_inq_dimid(nCells)')
+    call check_nc(stat,  'nf90_inq_dimid(nCells)')
     stat = nf90_inquire_dimension(fin, dimid, len=nCells)
-    call check_nc(stat, 'nf90_inquire_dimension(nCells)')
+    call check_nc(stat,  'nf90_inquire_dimension(nCells)')
 
     stat = nf90_inq_dimid(fin, 'nVertices', dimid)
-    call check_nc(stat, 'nf90_inq_dimid(nVertices)')
+    call check_nc(stat,  'nf90_inq_dimid(nVertices)')
     stat = nf90_inquire_dimension(fin, dimid, len=nVertices)
-    call check_nc(stat, 'nf90_inquire_dimension(nVertices)')
+    call check_nc(stat,  'nf90_inquire_dimension(nVertices)')
 
     stat = nf90_inq_dimid(fin, 'maxEdges', dimid)
-    call check_nc(stat, 'nf90_inq_dimid(maxEdges)')
+    call check_nc(stat,  'nf90_inq_dimid(maxEdges)')
     stat = nf90_inquire_dimension(fin, dimid, len=maxEdges)
-    call check_nc(stat, 'nf90_inquire_dimension(maxEdges)')
+    call check_nc(stat,  'nf90_inquire_dimension(maxEdges)')
 
     allocate(xCell(nCells), yCell(nCells))
     allocate(xVertex(nVertices), yVertex(nVertices))
@@ -353,6 +323,20 @@ contains
     call check_nc(stat, 'nf90_inq_varid(verticesOnCell)')
     stat = nf90_get_var(fin, varid, verticesOnCell)
     call check_nc(stat, 'nf90_get_var(verticesOnCell)')
+
+    allocate(landMask(nCells))
+    stat = nf90_inq_varid(fin, 'landmask', varid)
+    if (stat == nf90_noerr) then
+       haveLandMask = .true.
+       stat = nf90_get_var(fin, varid, landMask)
+       call check_nc(stat, 'nf90_get_var(landMask)')
+       write(*,'(A,I0,A,I0,A)') ' -- land-sea mask: ', count(landMask == 1), &
+          ' land and ', count(landMask == 0), ' ocean cells'
+    else
+       haveLandMask = .false.
+       write(*,'(A)') ' -- WARNING: no landmask in '//trim(mpasFile)// &
+          '; elementMask not written, mesh is unmasked'
+    end if
 
     stat = nf90_close(fin)
     call check_nc(stat, 'nf90_close(input)')
@@ -506,8 +490,19 @@ contains
     stat = nf90_put_att(fout, var_centerCoords, 'units', 'kilometers')
     call check_nc(stat, 'nf90_put_att(centerCoords:units)')
 
-    ! elementArea and elementMask are optional; ESMF derives areas from the
-    ! geometry unless addUserArea is requested, so neither is written here.
+    ! elementMask is optional. The values use MPAS's landmask (1=land, 0=ocean)
+    if (haveLandMask) then
+       stat = nf90_def_var(fout, 'elementMask', nf90_int, &
+            (/dim_elementCount/), var_elementMask)
+       call check_nc(stat, 'nf90_def_var(elementMask)')
+       stat = nf90_put_att(fout, var_elementMask, 'long_name', &
+            'land-ocean mask (1=land, 0=ocean)')
+       call check_nc(stat, 'nf90_put_att(elementMask:long_name)')
+    end if
+
+    ! elementArea is optional; ESMF derives areas from the geometry unless
+    ! addUserArea is requested, so it is not written here.
+
     stat = nf90_put_att(fout, nf90_global, 'gridType', 'unstructured mesh')
     call check_nc(stat, 'nf90_put_att(gridType)')
     stat = nf90_put_att(fout, nf90_global, 'version', '0.9')
@@ -526,20 +521,15 @@ contains
     call check_nc(stat, 'nf90_put_var(numElementConn)')
     stat = nf90_put_var(fout, var_centerCoords, centerCoords)
     call check_nc(stat, 'nf90_put_var(centerCoords)')
+    if (haveLandMask) then
+       stat = nf90_put_var(fout, var_elementMask, landMask)
+       call check_nc(stat, 'nf90_put_var(elementMask)')
+    end if
 
     stat = nf90_close(fout)
     call check_nc(stat, 'nf90_close(output)')
 
   contains
-
-    subroutine check_nc(status, where)
-      integer, intent(in) :: status
-      character(len=*), intent(in) :: where
-      if (status /= nf90_noerr) then
-         write(*,'(A)') 'NetCDF error in '//trim(where)//': '//trim(nf90_strerror(status))
-         error stop 1
-      end if
-    end subroutine check_nc
 
     subroutine get_r8(ncid, name, values)
       !> MPAS planar coordinates are stored as float; NetCDF converts on read.
@@ -620,8 +610,7 @@ contains
   ! Convert MPAS mesh to scrip format. Based on
   ! mpas-dev.github.io/MPAS-Tools/0.24.0/_modules/mpas_tools/scrip/from_mpas.html
   subroutine mpas_to_scrip_mesh(mpasFile, scripFile, useLandIceMask)
-    use netcdf
-    use iso_fortran_env, only : real64, int32
+
     implicit none
 
     character(len=*), intent(in) :: mpasFile
@@ -801,6 +790,17 @@ contains
     grid_area = areaCell / (sphereRadius*sphereRadius)
     grid_dims(1) = nCells
 
+    stat = nf90_inq_varid(fin, 'landmask', varid)
+    if (stat == nf90_noerr) then
+       stat = nf90_get_var(fin, varid, grid_imask)
+       call check_nc(stat, 'nf90_get_var(landmask)')
+       write(*,'(A,I0,A,I0,A)') ' -- land-sea mask: ', count(grid_imask == 1), &
+          ' land and ', count(grid_imask == 0), ' ocean cells'
+    else
+       grid_imask = 1
+       write(*,'(A)') ' -- WARNING: no landmask in '//trim(mpasFile)// &
+          '; using default land-sea mask'
+    end if
 
     allocate(grid_corner_lat(maxVertices, nCells))
     allocate(grid_corner_lon(maxVertices, nCells))
@@ -837,14 +837,17 @@ contains
     !   end do
     ! end do
 
+    ! grid_imask carries MPAS's landmask values as they are (1=land, 0=ocean).
+    ! Note SCRIP tools that honour grid_imask by default treat 0 as masked, so
+    ! the ocean cells are the ones excluded if such a tool reads this file
+    ! unmodified. When the land-ice mask is also requested a cell stays 1 only
+    ! if it is land and not land ice.
     if (doLandIceMask) then
        if (allocated(landIceMask1d)) then
-          grid_imask = 1 - landIceMask1d
+          grid_imask = grid_imask * (1 - landIceMask1d)
        else
-          grid_imask = 1 - landIceMask2d(1,:)
+          grid_imask = grid_imask * (1 - landIceMask2d(1,:))
        end if
-    else
-       grid_imask = 1
     end if
 
     ! Serial create: only PET0 reaches here now. Creating with comm=MPI_COMM_WORLD
@@ -918,17 +921,6 @@ contains
     stat = nf90_close(fout)
     call check_nc(stat, 'nf90_close(output)')
 
-  contains
-
-    subroutine check_nc(status, where)
-      integer, intent(in) :: status
-      character(len=*), intent(in) :: where
-      if (status /= nf90_noerr) then
-         write(*,'(A)') 'NetCDF error in '//trim(where)//': '//trim(nf90_strerror(status))
-         error stop 1
-      end if
-    end subroutine check_nc
-
   end subroutine mpas_to_scrip_mesh
 
-end module mpas_nuopc_utils
+end module mpas_nuopc_geom

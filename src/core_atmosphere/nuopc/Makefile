@@ -1,13 +1,16 @@
 .SUFFIXES: .F90 .o
 
 OBJS = mpas_nuopc_atm.o \
-	mpas_nuopc_fields.o \
-	mpas_nuopc_utils.o
+	mpas_nuopc_field.o \
+	mpas_nuopc_fieldlist.o \
+	mpas_nuopc_geom.o
 
 all: $(OBJS)
 
-mpas_nuopc_fields.o: mpas_nuopc_utils.o
-mpas_nuopc_atm.o: mpas_nuopc_fields.o
+mpas_nuopc_geom.o: mpas_nuopc_macros.h
+mpas_nuopc_field.o: mpas_nuopc_macros.h mpas_nuopc_geom.o
+mpas_nuopc_fieldlist.o: mpas_nuopc_macros.h mpas_nuopc_field.o mpas_nuopc_geom.o
+mpas_nuopc_atm.o: mpas_nuopc_macros.h mpas_nuopc_field.o mpas_nuopc_fieldlist.o mpas_nuopc_geom.o
 
 clean:
 	$(RM) *.o *.mod
@@ -17,4 +20,4 @@ clean:
 
 %.o: %.F90
 	$(RM) $@ $*.mod
-	$(FC) $(CPPFLAGS) $(PHYSICS) $(FFLAGS) -c $< -o $@ -I.. -I../physics -I../physics/physics_noahmp/utility -I../../framework -I../../driver -I../../operators $(CPPINCLUDES) $(FCINCLUDES) $(MPAS_ESMF_INC)
+	$(FC) $(CPPFLAGS) $(PHYSICS) $(FFLAGS) -c $< -o $@ -I.. -I../../framework -I../../driver -I../../operators $(CPPINCLUDES) $(FCINCLUDES)

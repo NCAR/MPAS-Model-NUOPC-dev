@@ -1,4 +1,4 @@
-#include "mpas_nuopc_macros.inc"
+#include "mpas_nuopc_macros.h"
 
 module mpas_nuopc_atm
   !> MPAS NUOPC Cap for Atmosphere
@@ -19,12 +19,20 @@ module mpas_nuopc_atm
   use mpas_pool_routines, only: mpas_pool_get_config
   use mpas_subdriver, only: mpas_init, mpas_finalize
   use atm_core, only: atm_core_run_prepare, atm_core_run_step
+  use mpas_nuopc_field, only: field
+  use mpas_nuopc_fieldlist, only: fieldlist
+  use mpas_nuopc_geom, only: mpas_distgridcreate, mpas_meshcreate
 
   implicit none
 
   private
+
   ! MPAS state attached to NUOPC model
   type mpas_nuopc_atm_state
+    integer :: verbosity = 0
+    type(ESMF_DistGrid) :: distgrid
+    type(ESMF_Mesh) :: mesh_esmf
+    type(fieldlist) :: export_fields
     type (core_type), pointer :: corelist => null()
     type (domain_type), pointer :: domain => null()
     real (kind=rkind), pointer :: dt => null()
@@ -95,8 +103,6 @@ module mpas_nuopc_atm
 
   subroutine Advertise(model, rc)
     !> Advertise available export fields and desired import fields
-    use mpas_nuopc_fields, only : advertise_fields, get_field_list, &
-         cap_field_t, add_field_dictionary
 
     ! arguments
     type(ESMF_GridComp)  :: model
@@ -107,7 +113,6 @@ module mpas_nuopc_atm
     type(mpas_nuopc_atm_state), pointer :: mState
     type(ESMF_VM) :: vm
     type(ESMF_State) :: importState, exportState
-    type(cap_field_t), allocatable, target :: field_list(:)
     integer :: int_mpic
 #ifdef MPAS_USE_MPI_F08
     type(MPI_Comm) :: mpic
@@ -119,8 +124,14 @@ module mpas_nuopc_atm
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
-    call NUOPC_ModelGet(model, importState=importState, &
-      exportState=exportState, rc=rc)
+    call NUOPC_CompGet(model, verbosity=mState%verbosity, rc=rc)
+    ESMF_ERR_RETURN(rc)
+
+    call NUOPC_ModelGet(model, &
+      importState=importState, &
+      exportState=exportState, &
+      rc=rc &
+    )
     ESMF_ERR_RETURN(rc)
 
     call ESMF_GridCompGet(model, vm=vm, rc=rc)
@@ -141,21 +152,56 @@ module mpas_nuopc_atm
       external_comm=int_mpic)
 #endif
 
-    call NUOPC_ModelGet(model, importState=importState, &
-         exportState=exportState, rc=rc)
+    call NUOPC_ModelGet(model, &
+      importState=importState, &
+      exportState=exportState, &
+      rc=rc &
+    )
     ESMF_ERR_RETURN(rc)
 
-    field_list = get_field_list()
-    call add_field_dictionary(field_list, rc)
+    mState%distgrid = mpas_distgridcreate(mState%domain, rc=rc)
     ESMF_ERR_RETURN(rc)
 
-    call advertise_fields(model, field_list, importState, exportState, rc=rc)
+    mState%mesh_esmf = mpas_meshcreate(mState%distgrid, mState%domain, rc=rc)
     ESMF_ERR_RETURN(rc)
 
-    call ESMF_StateLog(exportState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+    mState%export_fields = fieldlist([ &
+      field("sfc_input_tslb","soil_temperature"), &
+      field("diag_physics_t2m","surface_air_temperature"), &
+      field("diag_physics_q2","surface_specific_humidity"), &
+      field("diag_physics_swdnb","incident_shortwave"), &
+      field("diag_physics_lwdnb","incident_longwave"), &
+      field("diag_physics_u10","eastward_wind"), &
+      field("diag_physics_v10","northward_wind"), &
+      field("diag_surface_pressure","surface_pressure"), &
+      field("diag_physics_ch","surface_exchange_coefficient_heat"), &
+      field("diag_physics_chs2","surface_exchange_coefficient_heat_2m"), &
+      field("diag_physics_cqs2","surface_exchange_coefficient_moisture_2m"), &
+      field("diag_physics_sfc_emiss","surface_emissivity"), &
+      field("diag_physics_coszr","cosine_zenith_angle"), &
+      field("sfc_input_xice","sea_ice_area_fraction"), &
+      field("sfc_input_tmn","soil_temperature_lower_boundary"), &
+      field("diag_physics_rainncv","rainfall_accumulated"), &
+      field("diag_physics_raincv","convective_rainfall_accumulated") &
+    ])
+
+    call mState%export_fields%initialize( &
+      domain=mState%domain, &
+      mesh=mState%mesh_esmf, &
+      rc=rc &
+    )
     ESMF_ERR_RETURN(rc)
-    call ESMF_StateLog(importState, logMsgFlag=ESMF_LOGMSG_INFO, rc=rc)
+
+    call mState%export_fields%advertise( &
+      state=exportState, &
+      rc=rc &
+    )
     ESMF_ERR_RETURN(rc)
+
+    if (mState%verbosity > 0) then
+      call mState%export_fields%print(writePet=0, rc=rc)
+      ESMF_ERR_RETURN(rc)
+    end if
 
   end subroutine Advertise
 
@@ -163,7 +209,6 @@ module mpas_nuopc_atm
 
   subroutine Realize(model, rc)
     !> Check field connections and realize connected fields
-    use mpas_nuopc_fields, only : realize_fields, get_field_list, cap_field_t
 
     ! arguments
     type(ESMF_GridComp)  :: model
@@ -172,8 +217,8 @@ module mpas_nuopc_atm
     ! local variables
     type(mpas_nuopc_atm_wrapper) :: modelStateWrapper
     type(mpas_nuopc_atm_state), pointer :: mState
+    type(ESMF_Clock) :: clock
     type(ESMF_State) :: importState, exportState
-    type(cap_field_t), allocatable, target :: field_list(:)
 
     rc = ESMF_SUCCESS
 
@@ -181,14 +226,24 @@ module mpas_nuopc_atm
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
-    call NUOPC_ModelGet(model, importState=importState, &
-      exportState=exportState, rc=rc)
+    call NUOPC_ModelGet(model, &
+      driverClock=clock, &
+      importState=importState, &
+      exportState=exportState, &
+      rc=rc &
+    )
     ESMF_ERR_RETURN(rc)
 
-    field_list = get_field_list()
-    call realize_fields(model, mState%domain, field_list, importState, exportState, &
-         realizeAllImport=.false., realizeAllExport=.true., rc=rc)
+    call mState%export_fields%realize(state=exportState, rc=rc)
     ESMF_ERR_RETURN(rc)
+
+    call mState%export_fields%data_initialize(clock=clock, rc=rc)
+    ESMF_ERR_RETURN(rc)
+
+    if (mState%verbosity > 0) then
+      call mState%export_fields%print(writePet=0, rc=rc)
+      ESMF_ERR_RETURN(rc)
+    end if
 
   end subroutine Realize
 
@@ -217,9 +272,12 @@ module mpas_nuopc_atm
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
-    call NUOPC_ModelGet(model, modelClock=clock, &
+    call NUOPC_ModelGet(model, &
+      modelClock=clock, &
       importState=importState, &
-      exportState=exportState, rc=rc)
+      exportState=exportState, &
+      rc=rc &
+    )
     ESMF_ERR_RETURN(rc)
 
     ! initialize time step (dt)
@@ -354,6 +412,11 @@ module mpas_nuopc_atm
       return
     end if
 
+    if (mState%verbosity > 0) then
+      call mState%export_fields%print_stats(writePet=0, rc=rc)
+      ESMF_ERR_RETURN(rc)
+    end if
+
   end subroutine Advance
 
   !-----------------------------------------------------------------------------
@@ -376,8 +439,14 @@ module mpas_nuopc_atm
     mState => modelStateWrapper%mState
     ESMF_ERR_RETURN(rc)
 
-    call NUOPC_ModelGet(model, importState=importState, &
-      exportState=exportState, rc=rc)
+    call NUOPC_ModelGet(model, &
+      importState=importState, &
+      exportState=exportState, &
+      rc=rc &
+    )
+    ESMF_ERR_RETURN(rc)
+
+    call mState%export_fields%finalize(rc=rc)
     ESMF_ERR_RETURN(rc)
 
     call mpas_finalize(corelist=mState%corelist, domain_ptr=mState%domain)
