@@ -19,9 +19,9 @@ module mpas_nuopc_atm
   use mpas_pool_routines, only: mpas_pool_get_config
   use mpas_subdriver, only: mpas_init, mpas_finalize
   use atm_core, only: atm_core_run_prepare, atm_core_run_step
-  use mpas_nuopc_field, only: field
-  use mpas_nuopc_fieldlist, only: fieldlist
-  use mpas_nuopc_geom, only: mpas_distgridcreate, mpas_meshcreate
+  use mpas_nuopc_field, only: field_class, new_field
+  use mpas_nuopc_fieldlist, only: fieldlist_class, new_fieldlist
+  use mpas_nuopc_geom, only: mesh_class, new_mesh
 
   implicit none
 
@@ -30,9 +30,8 @@ module mpas_nuopc_atm
   ! MPAS state attached to NUOPC model
   type mpas_nuopc_atm_state
     integer :: verbosity = 0
-    type(ESMF_DistGrid) :: distgrid
-    type(ESMF_Mesh) :: mesh_esmf
-    type(fieldlist) :: export_fields
+    type(mesh_class) :: mesh
+    type(fieldlist_class) :: export_fields
     type (core_type), pointer :: corelist => null()
     type (domain_type), pointer :: domain => null()
     real (kind=rkind), pointer :: dt => null()
@@ -113,10 +112,12 @@ module mpas_nuopc_atm
     type(mpas_nuopc_atm_state), pointer :: mState
     type(ESMF_VM) :: vm
     type(ESMF_State) :: importState, exportState
+    integer :: localPet
     integer :: int_mpic
 #ifdef MPAS_USE_MPI_F08
     type(MPI_Comm) :: mpic
 #endif
+    character(len=*), parameter :: method = "Advertise"
 
     rc = ESMF_SUCCESS
 
@@ -137,8 +138,7 @@ module mpas_nuopc_atm
     call ESMF_GridCompGet(model, vm=vm, rc=rc)
     ESMF_ERR_RETURN(rc)
 
-    call ESMF_VMGet(vm, &
-      mpiCommunicator=int_mpic, rc=rc)
+    call ESMF_VMGet(vm, localPet=localPet, mpiCommunicator=int_mpic, rc=rc)
     ESMF_ERR_RETURN(rc)
 
 #ifdef MPAS_USE_MPI_F08
@@ -152,42 +152,48 @@ module mpas_nuopc_atm
       external_comm=int_mpic)
 #endif
 
-    call NUOPC_ModelGet(model, &
-      importState=importState, &
-      exportState=exportState, &
-      rc=rc &
-    )
-    ESMF_ERR_RETURN(rc)
+    if (localPet /= mState%domain%dminfo%my_proc_id) then
+      call ESMF_LogSetError( &
+        ESMF_RC_OBJ_INIT, &
+        msg="ESMF local PET must match the MPAS rank", &
+        line=__LINE__, &
+        file=__FILE__, &
+        method=method, &
+        rcToReturn=rc &
+      )
+      return
+    end if
 
-    mState%distgrid = mpas_distgridcreate(mState%domain, rc=rc)
+    mState%mesh = new_mesh(mState%domain, rc=rc)
     ESMF_ERR_RETURN(rc)
+    if (mState%verbosity > 0) then
+      call mState%mesh%print_mesh(writePet=0, rc=rc)
+      ESMF_ERR_RETURN(rc)
+    end if
 
-    mState%mesh_esmf = mpas_meshcreate(mState%distgrid, mState%domain, rc=rc)
-    ESMF_ERR_RETURN(rc)
-
-    mState%export_fields = fieldlist([ &
-      field("sfc_input_tslb","soil_temperature"), &
-      field("diag_physics_t2m","surface_air_temperature"), &
-      field("diag_physics_q2","surface_specific_humidity"), &
-      field("diag_physics_swdnb","incident_shortwave"), &
-      field("diag_physics_lwdnb","incident_longwave"), &
-      field("diag_physics_u10","eastward_wind"), &
-      field("diag_physics_v10","northward_wind"), &
-      field("diag_surface_pressure","surface_pressure"), &
-      field("diag_physics_ch","surface_exchange_coefficient_heat"), &
-      field("diag_physics_chs2","surface_exchange_coefficient_heat_2m"), &
-      field("diag_physics_cqs2","surface_exchange_coefficient_moisture_2m"), &
-      field("diag_physics_sfc_emiss","surface_emissivity"), &
-      field("diag_physics_coszr","cosine_zenith_angle"), &
-      field("sfc_input_xice","sea_ice_area_fraction"), &
-      field("sfc_input_tmn","soil_temperature_lower_boundary"), &
-      field("diag_physics_rainncv","rainfall_accumulated"), &
-      field("diag_physics_raincv","convective_rainfall_accumulated") &
+    mState%export_fields = new_fieldlist([ &
+      new_field("sfc_input_tslb","soil_temperature"), &
+      new_field("diag_physics_t2m","surface_air_temperature"), &
+      new_field("diag_physics_q2","surface_specific_humidity"), &
+      new_field("diag_physics_swdnb","incident_shortwave"), &
+      new_field("diag_physics_lwdnb","incident_longwave"), &
+      new_field("diag_physics_u10","eastward_wind"), &
+      new_field("diag_physics_v10","northward_wind"), &
+      new_field("diag_surface_pressure","surface_pressure"), &
+      new_field("diag_physics_ch","surface_exchange_coefficient_heat"), &
+      new_field("diag_physics_chs2","surface_exchange_coefficient_heat_2m"), &
+      new_field("diag_physics_cqs2","surface_exchange_coefficient_moisture_2m"), &
+      new_field("diag_physics_sfc_emiss","surface_emissivity"), &
+      new_field("diag_physics_coszr","cosine_zenith_angle"), &
+      new_field("sfc_input_xice","sea_ice_area_fraction"), &
+      new_field("sfc_input_tmn","soil_temperature_lower_boundary"), &
+      new_field("diag_physics_rainncv","rainfall_accumulated"), &
+      new_field("diag_physics_raincv","convective_rainfall_accumulated") &
     ])
 
     call mState%export_fields%initialize( &
       domain=mState%domain, &
-      mesh=mState%mesh_esmf, &
+      mesh=mState%mesh, &
       rc=rc &
     )
     ESMF_ERR_RETURN(rc)

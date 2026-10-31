@@ -8,13 +8,14 @@ module mpas_nuopc_fieldlist
   use esmf
   use nuopc
   use mpas_derived_types, only: domain_type
-  use mpas_nuopc_field, only: field
+  use mpas_nuopc_field, only: field_class, new_field
+  use mpas_nuopc_geom, only: mesh_class
 
   implicit none
   private
 
-  type :: fieldlist
-    type(field), allocatable :: fields(:)
+  type :: fieldlist_class
+    type(field_class), allocatable :: fields(:)
     contains
       procedure :: initialize => fieldlist_initialize
       procedure :: advertise => fieldlist_advertise
@@ -24,15 +25,15 @@ module mpas_nuopc_fieldlist
       procedure :: dictionary_add => fieldlist_dictionary_add
       procedure :: print => fieldlist_print_list
       procedure :: print_stats => fieldlist_print_stats
-  end type fieldlist
+  end type fieldlist_class
 
-  interface fieldlist
+  interface new_fieldlist
     module procedure fieldlist_create_keys
-    module procedure fieldlist_create_keys_sd
     module procedure fieldlist_create_fields
-  end interface fieldlist
+  end interface new_fieldlist
 
-  public :: fieldlist
+  public :: fieldlist_class
+  public :: new_fieldlist
 
 contains
 
@@ -40,7 +41,7 @@ contains
   ! print fieldlist
   subroutine fieldlist_print_list(self, writePet, rc)
     ! arguments
-    class(fieldlist), intent(in) :: self
+    class(fieldlist_class), intent(in) :: self
     integer, intent(in) :: writePet
     integer, intent(out) :: rc
     ! local variables
@@ -60,7 +61,7 @@ contains
 
     if (doWrite) then
       write(*, "(A)") "### Field List"
-      write(*, fmt_hdr) "Name", "Rank", "Ungrd", "Adv", "Real", "Init"
+      write(*, fmt_hdr) "Name", "Rank", "Ungrd", "Init", "Adv", "Real"
       if (size(self%fields) == 0) then
         write(*, "(A)") "(fieldlist is empty)"
       end if
@@ -70,9 +71,9 @@ contains
           self%fields(fld_i)%key, &
           self%fields(fld_i)%rank, &
           self%fields(fld_i)%ungriddedDimCount, &
+          self%fields(fld_i)%initialized, &
           self%fields(fld_i)%advertised, &
-          self%fields(fld_i)%realized, &
-          self%fields(fld_i)%initialized
+          self%fields(fld_i)%realized
       end do
     end if
 
@@ -82,7 +83,7 @@ contains
   ! print field statistics
   subroutine fieldlist_print_stats(self, writePet, rc)
     ! arguments
-    class(fieldlist), intent(in) :: self
+    class(fieldlist_class), intent(in) :: self
     integer, intent(in) :: writePet
     integer, intent(out) :: rc
     ! local variables
@@ -127,9 +128,9 @@ contains
   ! initialize fieldlist
   subroutine fieldlist_initialize(self, domain, mesh, rc)
     ! arguments
-    class(fieldlist), intent(inout) :: self
+    class(fieldlist_class), intent(inout) :: self
     type(domain_type), intent(in) :: domain
-    type(ESMF_Mesh), intent(in) :: mesh
+    type(mesh_class), intent(in) :: mesh
     integer, intent(out) :: rc
     ! local variables
     integer :: fld_i
@@ -148,7 +149,7 @@ contains
   ! advertise fieldlist
   subroutine fieldlist_advertise(self, state, rc)
     ! arguments
-    class(fieldlist), intent(inout) :: self
+    class(fieldlist_class), intent(inout) :: self
     type(ESMF_State), intent(inout) :: state
     integer, intent(out) :: rc
     ! local variables
@@ -168,7 +169,7 @@ contains
   ! realize the advertised fields
   subroutine fieldlist_realize(self, state, realizeAll, rc)
     ! arguments
-    class(fieldlist), intent(inout) :: self
+    class(fieldlist_class), intent(inout) :: self
     type(ESMF_State), intent(inout) :: state
     logical, intent(in), optional :: realizeAll
     integer, intent(out) :: rc
@@ -222,7 +223,7 @@ contains
   ! intialize field data in fieldlist
   subroutine fieldlist_data_initialize(self, clock, rc)
     ! arguments
-    class(fieldlist), intent(inout) :: self
+    class(fieldlist_class), intent(inout) :: self
     type(ESMF_Clock), intent(in) :: clock
     integer, intent(out) :: rc
     ! local variables
@@ -258,7 +259,7 @@ contains
   ! finalize fieldlist
   subroutine fieldlist_finalize(self, rc)
     ! arguments
-    class(fieldlist), intent(inout) :: self
+    class(fieldlist_class), intent(inout) :: self
     integer, intent(out) :: rc
     ! local variables
     integer :: fld_i
@@ -279,7 +280,7 @@ contains
   ! add entries to the NUOPC field dictionary
   subroutine fieldlist_dictionary_add(self, rc)
     ! arguments
-    class(fieldlist), intent(inout) :: self
+    class(fieldlist_class), intent(inout) :: self
     integer, intent(out) :: rc
     ! local variables
     integer :: fld_i
@@ -309,43 +310,30 @@ contains
   !-----------------------------------------------------------------------
 
   !-----------------------------------------------------------------------
-  ! create fieldlist from keys
-  pure type(fieldlist) function fieldlist_create_keys(keys)
-    character(*), intent(in) :: keys(:)
-    ! local variables
-    integer :: fld_i
-  
-    allocate(fieldlist_create_keys%fields(size(keys)))
-    do fld_i = 1, size(keys)
-      fieldlist_create_keys%fields(fld_i) = field(keys(fld_i))
-    end do
-  end function fieldlist_create_keys
-
-  !-----------------------------------------------------------------------
   ! create fieldlist from keys and standard names
-  pure type(fieldlist) function fieldlist_create_keys_sd(keys, sd_names)
+  pure type(fieldlist_class) function fieldlist_create_keys(keys, sd_names) result(fieldlist)
     character(*), intent(in) :: keys(:)
     character(*), intent(in) :: sd_names(:)
     ! local variables
     integer :: fld_i
 
-    allocate(fieldlist_create_keys_sd%fields(size(keys)))
+    allocate(fieldlist%fields(size(keys)))
     do fld_i = 1, size(keys)
-      fieldlist_create_keys_sd%fields(fld_i) = &
-        field(keys(fld_i), sd_name=sd_names(fld_i))
+      fieldlist%fields(fld_i) = &
+        new_field(keys(fld_i), sd_name=sd_names(fld_i))
     end do
-  end function fieldlist_create_keys_sd
+  end function fieldlist_create_keys
 
   !-----------------------------------------------------------------------
   ! create fieldlist from list of mpas_nuopc_field objects
-  type(fieldlist) function fieldlist_create_fields(fields)
-    type(field), intent(in) :: fields(:)
+  type(fieldlist_class) function fieldlist_create_fields(fields) result(fieldlist)
+    type(field_class), intent(in) :: fields(:)
     ! local variables
     integer :: fld_i
 
-    allocate(fieldlist_create_fields%fields(size(fields)))
+    allocate(fieldlist%fields(size(fields)))
     do fld_i = 1, size(fields)
-      fieldlist_create_fields%fields(fld_i) = fields(fld_i)
+      fieldlist%fields(fld_i) = fields(fld_i)
     end do
   end function fieldlist_create_fields
 

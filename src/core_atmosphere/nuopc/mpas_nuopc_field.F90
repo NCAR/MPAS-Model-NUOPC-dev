@@ -7,6 +7,7 @@
 module mpas_nuopc_field
   use esmf
   use nuopc
+  use mpas_nuopc_geom, only: mesh_class
   use mpas_derived_types, only: RKIND
   use mpas_derived_types, only: domain_type
   use mpas_derived_types, only: mpas_pool_type
@@ -56,7 +57,7 @@ module mpas_nuopc_field
     real(RKIND), pointer :: ptrD2(:,:) => null()
   end type field_data_D2
 
-  type :: field
+  type :: field_class
     character(len=64) :: key = ""
     character(len=ESMF_MAXSTR) :: sd_name = ""
     character(len=64) :: units = ""
@@ -75,26 +76,27 @@ module mpas_nuopc_field
       procedure :: destroy => field_destroy
       procedure :: stats => field_stats
       procedure :: set_ptr => field_set_ptr
-  end type field
+  end type field_class
 
-  interface field
-    module procedure field_create
-  end interface field
+  interface new_field
+  module procedure field_create
+end interface new_field
 
-  public :: field
+  public :: field_class
+  public :: new_field
 
 contains
 
   !-----------------------------------------------------------------------
   ! index of key in field_specs, or 0 if not found
-  pure integer function field_spec_index(key)
+  pure integer function field_spec_index(key) result(index)
     character(*), intent(in) :: key
     integer :: i
 
-    field_spec_index = 0
+    index = 0
     do i = 1, size(field_specs)
       if (trim(field_specs(i)%key) == trim(key)) then
-        field_spec_index = i
+        index = i
         return
       end if
     end do
@@ -102,11 +104,11 @@ contains
 
   !-----------------------------------------------------------------------
   ! create ESMF_Field using MPAS pointer
-  type(ESMF_Field) function create_efield_mpas_ptr(idx, domain, mesh, rc)
+  type(ESMF_Field) function create_efield_mpas_ptr(idx, domain, mesh, rc) result(esmffield)
     ! arguments
     integer, intent(in) :: idx
     type(domain_type), intent(in) :: domain
-    type(ESMF_Mesh), intent(in) :: mesh
+    type(mesh_class), intent(in) :: mesh
     integer, intent(out) :: rc
     ! local variables
     integer, pointer :: nCellsSolve
@@ -162,8 +164,8 @@ contains
         return
       end if
       ptrD2_owned => ptrD2(:, 1:nCellsSolve)
-      create_efield_mpas_ptr = ESMF_FieldCreate( &
-        mesh=mesh, &
+      esmffield = ESMF_FieldCreate( &
+        mesh=mesh%esmfmesh, &
         farrayPtr=ptrD2_owned, &
         meshloc=ESMF_MESHLOC_ELEMENT, &
         gridToFieldMap=(/2/), &
@@ -189,8 +191,8 @@ contains
         return
       end if
       ptrD1_owned => ptrD1(1:nCellsSolve)
-      create_efield_mpas_ptr = ESMF_FieldCreate( &
-        mesh=mesh, &
+      esmffield = ESMF_FieldCreate( &
+        mesh=mesh%esmfmesh, &
         farrayPtr=ptrD1_owned, &
         meshloc=ESMF_MESHLOC_ELEMENT, &
         name=field_specs(idx)%key, &
@@ -206,9 +208,9 @@ contains
   ! initialize field
   subroutine field_initialize(self, domain, mesh, rc)
     ! arguments
-    class(field), intent(inout) :: self
+    class(field_class), intent(inout) :: self
     type(domain_type), intent(in) :: domain
-    type(ESMF_Mesh), intent(in) :: mesh
+    type(mesh_class), intent(in) :: mesh
     integer, intent(out) :: rc
     ! local variables
     integer :: idx
@@ -274,7 +276,7 @@ contains
   ! destroy field instance - release memory
   subroutine field_destroy(self, rc)
     ! arguments
-    class(field), intent(inout) :: self
+    class(field_class), intent(inout) :: self
     integer, intent(out) :: rc
     ! local variables
     logical :: is_created
@@ -314,7 +316,7 @@ contains
   ! set the  field pointer for the given MPAS field
   subroutine field_set_ptr(self, rc)
     ! arguments
-    class(field), intent(inout) :: self
+    class(field_class), intent(inout) :: self
     integer, intent(out) :: rc
     ! local variables
     character(*), parameter :: method = "field_set_ptr"
@@ -372,7 +374,7 @@ contains
   ! advertise field
   subroutine field_advertise(self, state, rc)
     ! arguments
-    class(field), intent(inout) :: self
+    class(field_class), intent(inout) :: self
     type(ESMF_State), intent(inout) :: state
     integer, intent(out) :: rc
     ! local variables
@@ -397,7 +399,7 @@ contains
   ! Realize field in ESMF state
   subroutine field_realize(self, state, rc)
     ! arguments
-    class(field), intent(inout) :: self
+    class(field_class), intent(inout) :: self
     type(ESMF_State), intent(inout) :: state
     integer, intent(out) :: rc
     ! local variables
@@ -433,7 +435,7 @@ contains
   !-----------------------------------------------------------------------
   ! compute field data statistics (count, min, max, mean)
   subroutine field_stats(self, rootPet, countv, minv, maxv, meanv, rc)
-    class(field), intent(in) :: self
+    class(field_class), intent(in) :: self
     integer, intent(in) :: rootPet
     integer(ESMF_KIND_I8), intent(out) :: countv
     real(ESMF_KIND_R8), intent(out) :: minv, maxv, meanv
@@ -538,13 +540,13 @@ contains
 
   !-----------------------------------------------------------------------
   ! create field
-  pure type(field) function field_create(key, sd_name)
+  pure type(field_class) function field_create(key, sd_name) result(field)
     ! arguments
     character(*), intent(in) :: key
     character(*), intent(in) :: sd_name
 
-    field_create%key = key
-    field_create%sd_name = sd_name
+    field%key = key
+    field%sd_name = sd_name
   end function field_create
 
 end module mpas_nuopc_field
